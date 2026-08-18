@@ -1,0 +1,18 @@
+# Downloaded third-party Archi distribution (~300MB), reproducible via
+# https://github.com/archimatetool/archi.io/releases — not our content.
+/Archi/
+
+# Cloned example repositories used only to inspect format/structure —
+# they are their own git repos (nested .git), not ours to track.
+spikes/coarchi-example/
+spikes/coarchi-glycam/
+
+# Generated report output from spikes — reproducible artifacts (mostly
+# vendored static assets bootstrap/jquery/alasql copied by Archi itself).
+# Keep the source models and run logs, drop the generated HTML/PNG output.
+/spikes/m0-cli-report/report/
+/spikes/m0-cli-report/report-archisurance/
+/spikes/coarchi-glycam-report/
+
+# Misc
+.DS_Store

@@ -1,0 +1,26 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+[Core] Loaded model: 'Archisurance'
+[HTMLReport] Creating report from 'Archisurance' to /_data/_dev/8_Side/archimate/spikes/m0-cli-report/report-archisurance
+[HTMLReport] Copying files...
+[HTMLReport] Copying hints...
+[HTMLReport] Creating files...
+[HTMLReport] Generating image for View 1 of 17
+[HTMLReport] Generating image for View 2 of 17
+[HTMLReport] Generating image for View 3 of 17
+[HTMLReport] Generating image for View 4 of 17
+[HTMLReport] Generating image for View 5 of 17
+[HTMLReport] Generating image for View 6 of 17
+[HTMLReport] Generating image for View 7 of 17
+[HTMLReport] Generating image for View 8 of 17
+[HTMLReport] Generating image for View 9 of 17
+[HTMLReport] Generating image for View 10 of 17
+[HTMLReport] Generating image for View 11 of 17
+[HTMLReport] Generating image for View 12 of 17
+[HTMLReport] Generating image for View 13 of 17
+[HTMLReport] Generating image for View 14 of 17
+[HTMLReport] Generating image for View 15 of 17
+[HTMLReport] Generating image for View 16 of 17
+[HTMLReport] Generating image for View 17 of 17
+[HTMLReport] Creating files...
+[HTMLReport] Finalising...
+[HTMLReport] Report generated!
