@@ -7,6 +7,11 @@
 spikes/coarchi-example/
 spikes/coarchi-glycam/
 
+# Cloned upstream Archi source (nested .git) + Tycho/Maven build output and
+# raw build logs — reproducible from upstream, not ours to track.
+spikes/archi-source/
+spikes/archi-source-build-logs/
+
 # Generated report output from spikes — reproducible artifacts (mostly
 # vendored static assets bootstrap/jquery/alasql copied by Archi itself).
 # Keep the source models and run logs, drop the generated HTML/PNG output.
