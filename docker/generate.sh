@@ -117,7 +117,7 @@ else
     fi
 fi
 
-# --- Locate the model and decide plain vs coArchi (see plan.md §6/§15.7) ---
+# --- Locate the model and decide plain vs coArchi (see CLAUDE.md §6/§15.7) ---
 #
 # coArchi's own loader (ArchiRepository.locateModel()) hardcodes the relative
 # path "model/folder.xml" under whatever directory it's given — it does NOT

@@ -19,7 +19,12 @@ fi
 log "starting archi-webhook (internal, proxied by caddy at ${WEBHOOK_PATH:-/webhook} and /status)"
 /usr/local/bin/archi-webhook &
 WEBHOOK_PID=$!
-trap 'kill "$WEBHOOK_PID" 2>/dev/null || true; kill "$CADDY_PID" 2>/dev/null || true' TERM INT
+
+# CADDY_PID is not set yet at this point — default it to empty so the trap
+# (which may fire before the caddy launch below) doesn't hit an unbound
+# variable under `set -u`.
+CADDY_PID=""
+trap 'kill "$WEBHOOK_PID" 2>/dev/null || true; [ -n "$CADDY_PID" ] && kill "$CADDY_PID" 2>/dev/null || true' TERM INT
 
 log "starting caddy on :${PORT:-3000}"
 caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &

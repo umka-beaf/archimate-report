@@ -1,5 +1,5 @@
 # M3 — webhook-listener for on-push regeneration, on top of M1/M2 (clone +
-# format auto-detection + Archi CLI report generation + Caddy). See plan.md
+# format auto-detection + Archi CLI report generation + Caddy). See CLAUDE.md
 # for the full milestone history.
 
 FROM golang:1.23-alpine AS webhook-builder
@@ -22,7 +22,7 @@ ARG ARCHI_VERSION=latest
 # .archiplugin (a zip) from archimatetool.com, with no "latest" API to query.
 # Pin and bump manually; check https://www.archimatetool.com/plugins/ for
 # the current release. Without it, --modelrepository.loadModel silently
-# fails to load any model (see plan.md M2 notes on the "Model was not
+# fails to load any model (see CLAUDE.md M2 notes on the "Model was not
 # loaded" investigation).
 ARG COARCHI_VERSION=0.9.6
 
@@ -55,7 +55,7 @@ FROM debian:trixie-slim
 # See the ARCHI_VERSION comment above — same "latest" + cache caveat applies.
 ARG CADDY_VERSION=latest
 # TARGETARCH is auto-populated by buildx; for M1 we only build amd64 so this
-# is informational — the arm64 branch is added in M4 (see plan.md §5/§16).
+# is informational — the arm64 branch is added in M4 (see CLAUDE.md §5/§16).
 ARG TARGETARCH=amd64
 
 RUN set -eux; \
