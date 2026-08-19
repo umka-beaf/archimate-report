@@ -624,10 +624,21 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
 
 Создан `README.md` в корне проекта: быстрый старт (`docker run`), таблица
 переменных окружения (сжатая копия §7, с явной пометкой «источник истины —
-CLAUDE.md»), `docker-compose.yml`-пример, минимальный Kubernetes-манифест
-(`Deployment`+`Service`+`Secret` с `livenessProbe`/`readinessProbe` на
-`/status`), команда ручной multi-arch публикации (`docker buildx build --push`,
-без CI — см. §16 п.4) и ссылка на `CLAUDE.md` как полную историю решений.
+CLAUDE.md»), `docker-compose.yml`-пример, команда ручной multi-arch публикации
+(`docker buildx build --push`, без CI — см. §16 п.4) и ссылка на `CLAUDE.md`
+как полную историю решений.
+
+**Правка по фидбеку пользователя (тем же днём):** в docker-compose пример
+добавлено явное пояснение, что внешняя сеть `common` (`external: true`) не
+создаётся Compose автоматически — её нужно завести заранее (`docker network
+create common`), иначе `docker compose up` падает с ошибкой «network ... could
+not be found»; и дано альтернативное решение (убрать `x-network`/`networks`,
+раскомментировать `ports:`) для случая без общего reverse-proxy. Kubernetes-
+раздел (Deployment/Service/Secret-манифест) убран из README целиком — решено,
+что для этого проекта (один контейнер = один репозиторий = один отчёт, без
+пользы от нескольких реплик, см. снятый текст про `/data/report`) он не нужен;
+docker-compose остаётся единственным задокументированным способом деплоя
+помимо голого `docker run`.
 
 **docker-compose пример сделан в стиле, на который явно указал пользователь** —
 `/_data/_dev/8_Side/semaphore/servers/pi5_home/stacks/*.yml` (соседний проект,
