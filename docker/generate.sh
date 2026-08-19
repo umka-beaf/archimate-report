@@ -3,7 +3,9 @@
 # (token / SSH key / username+password), MODEL_FORMAT override.
 set -euo pipefail
 
-log() { echo "[generate] $*" >&2; }
+# Same timestamp format as entrypoint.sh and archi-webhook — see the comment
+# on entrypoint.sh's log() for why this isn't full structured/JSON logging.
+log() { printf '%s [generate] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2; }
 die() {
     log "ERROR: $*"
     exit 1

@@ -17,7 +17,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -27,6 +26,21 @@ import (
 )
 
 const listenAddr = "127.0.0.1:8088"
+
+// logf/fatalf print the same "<UTC RFC3339> [component] message" prefix as
+// entrypoint.sh and generate.sh's log() functions, so `docker logs` output
+// from all three processes sorts/greps consistently. Not the stdlib "log"
+// package because its flag-based formats (Ldate|Ltime, LUTC, ...) can't
+// produce this exact "2006-01-02T15:04:05Z" shape.
+func logf(format string, args ...any) {
+	ts := time.Now().UTC().Format("2006-01-02T15:04:05Z")
+	fmt.Fprintf(os.Stderr, ts+" "+format+"\n", args...)
+}
+
+func fatalf(format string, args ...any) {
+	logf(format, args...)
+	os.Exit(1)
+}
 
 // State tracks generation status and implements the single-slot debounce
 // queue: at most one generate.sh runs at a time; a webhook that arrives
@@ -94,12 +108,12 @@ func runGenerateOnce() error {
 	cmd := exec.Command("/usr/local/bin/generate.sh")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	log.Printf("[webhook] running generate.sh")
+	logf("[webhook] running generate.sh")
 	if err := cmd.Run(); err != nil {
-		log.Printf("[webhook] generate.sh failed: %v", err)
+		logf("[webhook] generate.sh failed: %v", err)
 		return err
 	}
-	log.Printf("[webhook] generate.sh succeeded")
+	logf("[webhook] generate.sh succeeded")
 	return nil
 }
 
@@ -168,7 +182,7 @@ func makeWebhookHandler(state *State, secret, provider string) http.HandlerFunc 
 		}
 
 		if !ok {
-			log.Printf("[webhook] rejected: bad signature (provider=%s)", provider)
+			logf("[webhook] rejected: bad signature (provider=%s)", provider)
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -217,7 +231,7 @@ func main() {
 		case "github", "gitlab", "generic":
 			// ok
 		default:
-			log.Fatalf("[webhook] WEBHOOK_SECRET is set but WEBHOOK_PROVIDER=%q is not one of github|gitlab|generic", provider)
+			fatalf("[webhook] WEBHOOK_SECRET is set but WEBHOOK_PROVIDER=%q is not one of github|gitlab|generic", provider)
 		}
 	}
 
@@ -227,12 +241,12 @@ func main() {
 
 	if secret != "" {
 		mux.HandleFunc(path, makeWebhookHandler(state, secret, provider))
-		log.Printf("[webhook] listening on %s, webhook path=%s provider=%s", listenAddr, path, provider)
+		logf("[webhook] listening on %s, webhook path=%s provider=%s", listenAddr, path, provider)
 	} else {
-		log.Printf("[webhook] WEBHOOK_SECRET not set, /webhook disabled (listening on %s for /status only)", listenAddr)
+		logf("[webhook] WEBHOOK_SECRET not set, /webhook disabled (listening on %s for /status only)", listenAddr)
 	}
 
 	if err := http.ListenAndServe(listenAddr, mux); err != nil {
-		log.Fatalf("[webhook] server failed: %v", fmt.Errorf("%w", err))
+		fatalf("[webhook] server failed: %v", fmt.Errorf("%w", err))
 	}
 }

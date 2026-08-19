@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-log() { echo "[entrypoint] $*" >&2; }
+# Timestamp format matches generate.sh and archi-webhook's log.Ldate|log.Ltime
+# (see webhook/main.go) so `docker logs` output from all three processes
+# sorts/greps consistently — deliberately not full JSON, this is a
+# single-container service with no downstream log aggregator, plain
+# timestamped prefixes are enough to correlate events across processes.
+log() { printf '%s [entrypoint] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2; }
 
 : "${GIT_URL:?GIT_URL is required}"
 REGENERATE_ON_START="${REGENERATE_ON_START:-true}"
