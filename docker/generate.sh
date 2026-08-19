@@ -8,6 +8,37 @@ die() {
     log "ERROR: $*"
     exit 1
 }
+
+# --- Bound the whole run (git clone/fetch + Archi CLI) by GENERATION_TIMEOUT
+# seconds. Re-exec the entire script once under `timeout`, guarded by an
+# exported marker so the re-exec only happens on the outer invocation — `exec`
+# replaces the process image (no leftover subshell/trap weirdness) and env
+# vars (GIT_URL etc.) carry over untouched. SIGTERM first, SIGKILL 10s later
+# if the Archi CLI/xvfb doesn't exit cleanly. ---
+GENERATION_TIMEOUT="${GENERATION_TIMEOUT:-600}"
+if [ -z "${_GENERATE_SH_TIMEOUT_GUARD:-}" ]; then
+    export _GENERATE_SH_TIMEOUT_GUARD=1
+    exec timeout --kill-after=10 "$GENERATION_TIMEOUT" "$0" "$@"
+fi
+
+# --- Retry a command up to 3 times with exponential backoff (3s, 6s), for
+# transient network failures on git operations. Deliberately not distinguishing
+# auth failures from network failures — git exits 128 for both, and telling
+# them apart would mean parsing stderr text, which is brittle. Worst case, an
+# auth failure costs an extra ~9s before the (still correct) final error. ---
+retry_cmd() {
+    local max_attempts=3 delay=3 attempt=1 rc
+    while true; do
+        "$@" && return 0
+        rc=$?
+        [ "$attempt" -ge "$max_attempts" ] && return "$rc"
+        log "command failed (exit $rc, attempt $attempt/$max_attempts) — retrying in ${delay}s: $*"
+        sleep "$delay"
+        attempt=$((attempt + 1))
+        delay=$((delay * 2))
+    done
+}
+
 urlencode() {
     local s="$1" out="" c
     local i
@@ -105,16 +136,21 @@ git config --global advice.detachedHead false
 if [ -d "$REPO_DIR/.git" ]; then
     log "updating existing clone in $REPO_DIR"
     git -C "$REPO_DIR" remote set-url origin "$CLONE_URL"
-    git -C "$REPO_DIR" fetch --depth 1 origin "${GIT_REF:-HEAD}"
+    retry_cmd git -C "$REPO_DIR" fetch --depth 1 origin "${GIT_REF:-HEAD}"
     git -C "$REPO_DIR" reset --hard FETCH_HEAD
 else
     log "cloning $GIT_URL into $REPO_DIR"
-    rm -rf "$REPO_DIR"
-    if [ -n "$GIT_REF" ]; then
-        git clone --depth 1 --branch "$GIT_REF" "$CLONE_URL" "$REPO_DIR"
-    else
-        git clone --depth 1 "$CLONE_URL" "$REPO_DIR"
-    fi
+    clone_once() {
+        # A failed clone can leave a partial $REPO_DIR behind — wipe it before
+        # every attempt (including the first) so retries start clean.
+        rm -rf "$REPO_DIR"
+        if [ -n "$GIT_REF" ]; then
+            git clone --depth 1 --branch "$GIT_REF" "$CLONE_URL" "$REPO_DIR"
+        else
+            git clone --depth 1 "$CLONE_URL" "$REPO_DIR"
+        fi
+    }
+    retry_cmd clone_once
 fi
 
 # --- Locate the model and decide plain vs coArchi (see CLAUDE.md §6/§15.7) ---
