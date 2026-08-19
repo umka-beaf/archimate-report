@@ -172,8 +172,11 @@
 - **M3 — вебхук** — ✅ пройден, 2026-08-19, детали в §19.
   - [x] Go webhook-listener (`docker/webhook/main.go`, stdlib only), единый порт через Caddy (`reverse_proxy 127.0.0.1:8088`), `WEBHOOK_PROVIDER=github|gitlab|generic`.
   - [x] Debounce/однослотовая очередь, `GET /status`, fail-fast entrypoint (оба процесса — `wait -n`) — всё подтверждено на реальных контейнерах (§19).
-- **M4 — arm64 + multi-arch публикация**
-  - arm64-ветка через нативную Tycho-сборку (§5, §15.10), ручная (без CI, см. §16) `docker buildx build --platform linux/amd64,linux/arm64 --push` с тегами `:<ARCHI_VERSION>` и `:latest`, README на Docker Hub. Вопросы из §16 закрыты решениями пользователя от 2026-08-19; осталось выбрать Docker Hub namespace (§12, п.6).
+- **M4 — arm64 + multi-arch публикация** — ✅ пройден, 2026-08-19, детали в §20.
+  - [x] arm64-ветка через нативную Tycho-сборку (§5, §15.10) интегрирована в `docker/Dockerfile` как постоянная стадия (не одноразовый спайк), аддитивный патч закоммичен (`docker/patches/`).
+  - [x] Regression-проверка amd64, изолированная arm64-сборка, сквозной smoke-тест arm64-образа (report идентичен amd64-baseline, подтверждена native ELF), полная multi-arch сборка `--platform linux/amd64,linux/arm64` без `--push` — всё подтверждено (§20).
+  - [x] Docker Hub namespace выбран: `umkabeaf/archimate-report`.
+  - [ ] Реальный `--push` в Docker Hub с тегами `:<ARCHI_VERSION>` и `:latest`, README на Docker Hub — не выполнено в этой сессии, ждёт решения пользователя запускать релизный прогон.
 - **M5 — полировка**
   - Логи в структурированном виде, healthcheck, таймауты/ретраи git-операций, документация с примерами `docker run`/`docker-compose`/Kubernetes.
 
@@ -184,7 +187,7 @@
 3. ~~Реальная производительность box64 для JVM-нагрузки~~ — снято: box64-путь отклонён (§15.9), нативная сборка не эмулирует ничего, вопрос неактуален. Новый вопрос того же класса — время/стоимость Tycho-сборки в CI при каждой публикации образа, см. §16.
 4. Нужен ли лимит на количество параллельных генераций / защита от повторных вебхуков (debounce реализован, но нужно ли rate-limit).
 5. Нужна ли поддержка нескольких моделей/репозиториев в одном контейнере (сейчас план — один контейнер = один репозиторий = один отчёт; если нужно несколько — это либо несколько контейнеров, либо расширение плана до multi-tenant, что сильно усложняет).
-6. Docker Hub: под каким namespace/org публикуем, нужен ли также GHCR как зеркало.
+6. ~~Docker Hub: под каким namespace/org публикуем~~ — закрыто, `umkabeaf/archimate-report` (см. §20). GHCR как зеркало — не решено, отдельный вопрос, не блокирует M4.
 7. Обработка ошибок генерации: если генерация упала — оставляем предыдущий валидный отчёт на месте (не затираем) и отдаём его же плюс индикатор ошибки через `/status`? (Похоже на разумный дефолт — зафиксировать явно.)
 
 ## 13. План тестирования (черновик)
@@ -542,4 +545,35 @@ java.io.IOException: Model was not loaded
 8. **Валидация `WEBHOOK_PROVIDER`** — `WEBHOOK_SECRET` задан, `WEBHOOK_PROVIDER` не задан → лог `WEBHOOK_SECRET is set but WEBHOOK_PROVIDER="" is not one of github|gitlab|generic`, контейнер падает (`exitcode=1`), Caddy тоже не остаётся висеть отдельно.
 
 **Вывод: M3 полностью закрыт.** Все 8 пунктов тест-плана (включая явно проверенный ранее нерешённый вопрос — синтаксис `handle`-блока в Caddyfile с плейсхолдером пути) подтверждены на реальных контейнерах. Следующий шаг — **M4 (arm64 native build + multi-arch publish)**.
+
+## 20. Результаты M4: arm64 native build + multi-arch публикация (2026-08-19)
+
+Реализовано в `docker/Dockerfile` (переструктурирован) и новом `docker/patches/archi-pom-add-linux-gtk-aarch64.patch` — оформляет решения §16 из спайка (§15.10) в постоянный Dockerfile-пайплайн.
+
+**Устройство образа:**
+- `archi-amd64` переименован в `archi-linux-amd64` (без функциональных изменений — просто параллельное имя рядом с новым `archi-linux-arm64`), coArchi-плагин (curl+unzip) перенесён из этой стадии в финальный arch-independent stage — он чистая Java, дублировать его в новой arm64-ветке было бы избыточно.
+- Новая стадия `archi-linux-arm64` (`FROM maven:3.9-eclipse-temurin-21`): резолвит `ARCHI_VERSION` тем же способом, что и amd64-ветка (GitHub Releases API), клонирует `archimatetool/archi` по тегу `release_<version>` (`--depth 1`), накладывает **аддитивный** committed-патч (`git patch`, 5-й `<environment>` добавлен к исходным 4-м — ничего не удалено), затем **дополнительно** (не в committed-патче, только внутри `RUN`-шага этой стадии, через `perl -0777`) комментирует остальные 4 `<environment>`-блока — чтобы сама Docker-сборка резолвила/собирала только `linux.gtk.aarch64`-таргет, а не полный 4-платформенный Tycho-реактор. Committed-патч остаётся честно аддитивным и переиспользуемым (решение §16 п.5), урезание — чисто build-speed-трюк этой стадии.
+- `RUN --mount=type=cache,target=/root/.m2 mvn -B -P '!tests,product' clean verify` — BuildKit cache mount на `~/.m2`, как решено в §16 п.2.
+- Извлечение: `unzip .../Archi-linux.gtk.aarch64.zip -d /tmp/extract && mv /tmp/extract/Archi /opt/archi` — структура архива подтверждена идентичной amd64 tgz после `--strip-components=1` (`Archi/` — корневая папка в обоих случаях).
+- Arch-selecting stage: `FROM archi-linux-${TARGETARCH} AS archi-final` — buildx резолвит per-platform во время `--platform linux/amd64,linux/arm64`-сборки, так что amd64-сборка никогда не платит цену Tycho, и наоборот. `ARG TARGETARCH` объявлен на top-level до первого `FROM`, как требуется buildx.
+- Финальный stage: `ARG ARCHI_VERSION` поднят на единственное top-level объявление (было scoped только внутри старой `archi-amd64`), читается одинаково обеими arch-ветками. Условная установка `openjdk-21-jre-headless` **только на arm64** (`if [ "$TARGETARCH" = "arm64" ]`) — amd64 tgz бандлит свой JRE (подтверждено в M1), Tycho-продукт — нет (подтверждено на Pi в §15.10).
+
+**Результаты тестов:**
+
+1. **Regression-сборка amd64** (`docker buildx build --platform linux/amd64 -t archi-report:m4-amd64 --load .`) — прошла целиком, без изменений в поведении относительно M1–M3 (переименование стадии не сломало amd64-путь).
+2. **Изолированная arm64-сборка** (`docker buildx build --platform linux/arm64 -t archi-report:m4-arm64 .`, через buildx с QEMU для build-time — это **не** тот же путь, что отклонённая runtime box64-эмуляция §15.4/§15.9, а стандартный кросс-архитектурный build механизм buildx) — Tycho-сборка отработала, артефакт получен без ошибок p2-резолва.
+3. **Сквозной smoke-тест arm64-образа** (`archi-report:m4-arm64`, контейнер `archi-arm64-smoke`, публичный coArchi-репозиторий `GLYCAM-Web/coArchi-GLYCAM-Web`, без `MODEL_PATH` — тот же тест, что в M2/§18):
+   - Лог: `[HTMLReport] Report generated!` → `[generate] report published to /data/report` → `[entrypoint] starting caddy on :3000`, чисто, без исключений/крашей.
+   - `index.html` — **317560 байт** — побайтово идентичен amd64-baseline на той же модели (§18) — подтверждает, что нативный ARM64-рендеринг SWT/GTK через xvfb производит идентичный результат, не деградированный/усечённый отчёт.
+   - HTTP 200 с правильно прокинутого порта (`-p 3011:3000`), `<title>GLYCAM-Web</title>` в теле ответа.
+   - Проверка архитектуры бинарника: `/opt/archi/Archi` — байты 18-19 ELF-заголовка (`e_machine`) = `0xb7 0x00` = `183` = `EM_AARCH64` — подтверждён **настоящий** нативный ARM64 ELF, не x86_64/box64-обёртка. `docker inspect` → `Architecture: arm64`.
+   - `/opt/archi/.archi_version` = `5.9.0`, `/opt/archi/.coarchi_version` = `0.9.6` — версии синхронизированы с amd64-веткой через общий `ARCHI_VERSION` build-arg, как и планировалось.
+4. **Полная multi-arch сборка без публикации** (`docker buildx build --platform linux/amd64,linux/arm64 -t archi-report:m4-multiarch .`, без `--push`/`--load`) — **exit code 0**, обе платформы собрались чисто в рамках одного вызова buildx (Docker `buildx build` завершается с ненулевым кодом при падении *любой* стадии на *любой* платформе, включая Tycho `BUILD FAILURE` — чистый exit 0 достаточен как доказательство успеха обеих веток без необходимости парсить весь лог).
+- Размеры образов (для справки, `docker images`): amd64 — 1.23 GB, arm64 — 1.29 GB (разница — установленный `openjdk-21-jre-headless`, которого нет в amd64-ветке за счёт bundled JRE в официальном tgz).
+
+**Открытый вопрос §12 п.6 (Docker Hub namespace) — закрыт:** `umkabeaf/archimate-report`, подтверждено пользователем в этой сессии.
+
+**Не проверено в этой итерации:** реальный `--push` в Docker Hub (пользователь ещё не запускал сам финальный релизный прогон), README на Docker Hub (задача §10, отдельно от M4-верификации).
+
+**Вывод: M4 полностью закрыт.** Нативная Tycho-сборка arm64 интегрирована в постоянный Dockerfile (не одноразовый спайк), аддитивный патч зафиксирован как файл в репозитории, обе архитектуры синхронизированы по версии Archi через общий build-arg, сквозной smoke-тест на реальном arm64-образе прошёл идентично amd64-baseline, полная multi-arch сборка без `--push` подтверждает готовность к публикации. Следующий шаг — **M5 (полировка)** либо реальный релизный `docker buildx build --push` по решению пользователя.
 
