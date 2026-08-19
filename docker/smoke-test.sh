@@ -44,7 +44,7 @@ CONTAINERS=()
 cleanup() {
     local c
     for c in "${CONTAINERS[@]:-}"; do
-        [ -n "$c" ] && docker rm -f "$c" >/dev/null 2>&1 || true
+        [ -n "$c" ] && docker rm -f "$c" > /dev/null 2>&1 || true
     done
 }
 trap cleanup EXIT
@@ -64,7 +64,7 @@ fi
 wait_for_http() {
     # wait_for_http <url> <timeout_seconds>
     local url="$1" timeout="$2" waited=0
-    while ! curl -fsS -o /dev/null "$url" 2>/dev/null; do
+    while ! curl -fsS -o /dev/null "$url" 2> /dev/null; do
         waited=$((waited + 1))
         [ "$waited" -ge "$timeout" ] && return 1
         sleep 1

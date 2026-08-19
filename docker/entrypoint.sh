@@ -41,6 +41,6 @@ CADDY_PID=$!
 wait -n "$WEBHOOK_PID" "$CADDY_PID"
 STATUS=$?
 
-kill "$WEBHOOK_PID" 2>/dev/null || true
-kill "$CADDY_PID" 2>/dev/null || true
+kill "$WEBHOOK_PID" 2> /dev/null || true
+kill "$CADDY_PID" 2> /dev/null || true
 exit "$STATUS"

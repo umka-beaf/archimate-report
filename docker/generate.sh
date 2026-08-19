@@ -114,16 +114,16 @@ elif [ -n "${GIT_SSH_PRIVATE_KEY:-}" ]; then
     KEY_FILE="$SECRETS_DIR/id_ssh"
     # Accept either a raw multi-line PEM or a base64-encoded blob.
     if printf '%s' "$GIT_SSH_PRIVATE_KEY" | grep -q '^-----BEGIN'; then
-        printf '%s\n' "$GIT_SSH_PRIVATE_KEY" >"$KEY_FILE"
+        printf '%s\n' "$GIT_SSH_PRIVATE_KEY" > "$KEY_FILE"
     else
-        printf '%s' "$GIT_SSH_PRIVATE_KEY" | base64 -d >"$KEY_FILE"
+        printf '%s' "$GIT_SSH_PRIVATE_KEY" | base64 -d > "$KEY_FILE"
     fi
     chmod 600 "$KEY_FILE"
 
     SSH_OPTS="-i $KEY_FILE -o IdentitiesOnly=yes"
     if [ -n "${GIT_SSH_KNOWN_HOSTS:-}" ]; then
         KNOWN_HOSTS_FILE="$SECRETS_DIR/known_hosts"
-        printf '%s\n' "$GIT_SSH_KNOWN_HOSTS" >"$KNOWN_HOSTS_FILE"
+        printf '%s\n' "$GIT_SSH_KNOWN_HOSTS" > "$KNOWN_HOSTS_FILE"
         chmod 600 "$KNOWN_HOSTS_FILE"
         SSH_OPTS="$SSH_OPTS -o UserKnownHostsFile=$KNOWN_HOSTS_FILE -o StrictHostKeyChecking=yes"
     else
