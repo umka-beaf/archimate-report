@@ -121,81 +121,21 @@ networks:
     name: common
 ```
 
-Если внешней сети `common` (или своего reverse-proxy) нет — просто уберите
-`x-network`/`networks` и раскомментируйте `ports: - 3000:3000`.
+Сеть `common` объявлена как `external: true` — Compose её не создаёт сам, она
+должна существовать заранее, иначе `docker compose up` упадёт с ошибкой вида
+`network common declared as external, but could not be found`. Создаётся один
+раз (переживает `docker compose down`/пересоздание стека):
 
-## Kubernetes
-
-Минимальный пример: `Deployment` + `Service` + `Secret` с токеном.
-
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: archimate-report-secrets
-type: Opaque
-stringData:
-  GIT_TOKEN: ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-  WEBHOOK_SECRET: change-me
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: archimate-report
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: archimate-report
-  template:
-    metadata:
-      labels:
-        app: archimate-report
-    spec:
-      containers:
-        - name: archimate-report
-          image: umkabeaf/archimate-report:latest
-          ports:
-            - containerPort: 3000
-          env:
-            - name: GIT_URL
-              value: https://github.com/your-org/your-model-repo.git
-            - name: WEBHOOK_PROVIDER
-              value: github
-            - name: TZ
-              value: Europe/Moscow
-          envFrom:
-            - secretRef:
-                name: archimate-report-secrets
-          livenessProbe:
-            httpGet:
-              path: /status
-              port: 3000
-            initialDelaySeconds: 10
-            periodSeconds: 30
-          readinessProbe:
-            httpGet:
-              path: /status
-              port: 3000
-            initialDelaySeconds: 5
-            periodSeconds: 10
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: archimate-report
-spec:
-  selector:
-    app: archimate-report
-  ports:
-    - port: 80
-      targetPort: 3000
+```bash
+docker network create common
 ```
 
-Реплики > 1 не имеют смысла без общего тома под `/data/report` — каждый под
-будет клонировать и генерировать отчёт независимо (что само по себе не
-страшно, но вебхук нужно будет слать во все поды отдельно, либо держать
-`replicas: 1`).
+Это удобно, когда перед сервисом уже стоит общий reverse-proxy (например,
+Caddy/Traefik) в отдельном compose-стеке, подключённый к той же сети — тогда
+`archimate-report` не публикует порт наружу напрямую, а достаётся прокси по
+имени контейнера внутри `common`. Если такого прокси нет и сеть заводить не
+хочется — просто уберите `x-network`/`networks` из примера и раскомментируйте
+`ports: - 3000:3000`, тогда сервис будет доступен напрямую на хосте.
 
 ## Сборка и публикация образа
 
