@@ -1,0 +1,22 @@
+{
+	admin off
+	auto_https off
+
+	# No `output file ...` here on purpose — logs go to stdout, which
+	# `docker logs` captures directly. Nothing is ever written to disk,
+	# so there is no log file to grow/rotate.
+	log {
+		output stdout
+		format console
+	}
+}
+
+:{$PORT} {
+	root * /data/report
+	file_server
+	encode gzip
+
+	# No access-log directive here either — kept off to avoid disk growth.
+	# If per-request logging is wanted later, add `log { output stdout }`
+	# inside this block (still stdout-only, never a file).
+}
