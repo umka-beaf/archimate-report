@@ -114,7 +114,8 @@
 | `GIT_USERNAME` / `GIT_PASSWORD` | нет* | логин+пароль для HTTPS |
 | `GIT_SSH_PRIVATE_KEY` | нет* | приватный SSH-ключ, base64 ИЛИ многострочный PEM прямо в переменной |
 | `GIT_SSH_KNOWN_HOSTS` | нет | содержимое known_hosts; если не задано — `StrictHostKeyChecking=accept-new` с предупреждением в логах |
-| `WEBHOOK_SECRET` | нет | если задан — включает и защищает `/webhook`; если не задан — webhook эндпоинт отключён (или открыт — решить, скорее отключён, безопаснее по умолчанию) |
+| `WEBHOOK_SECRET` | нет | если задан — включает и защищает `/webhook`; если не задан — webhook эндпоинт отключён (безопасный дефолт, реализовано в M3, §19) |
+| `WEBHOOK_PROVIDER` | нет*\* | `github` / `gitlab` / `generic` — способ проверки `WEBHOOK_SECRET`. Обязателен, если задан `WEBHOOK_SECRET` (иначе контейнер падает при старте с понятной ошибкой) |
 | `WEBHOOK_PATH` | нет | путь эндпоинта, по умолчанию `/webhook` |
 | `PORT` | нет | порт раздачи отчёта, по умолчанию `3000` |
 | `REGENERATE_ON_START` | нет | `true` (по умолчанию) / `false` — пропустить генерацию при старте (например, если volume с отчётом уже готов) |
@@ -122,18 +123,18 @@
 | `TZ` | нет | таймзона контейнера |
 
 `*` — из группы «секреты git» должен быть задан ровно один способ авторизации (или ни одного — для публичных репозиториев).
+`**` — обязательна только условно, см. описание.
 
 ## 8. Вебхук для перегенерации
 
-- Отдельный лёгкий HTTP-эндпоинт (не через Caddy как reverse-proxy на этот же процесс — либо Caddy шлюзует и `/webhook`, и статику, единым портом `PORT`, что проще для пользователя — один порт наружу).
-- Caddy настраивается на: `handle /webhook* { reverse_proxy <локальный webhook-listener> }` + `handle { file_server }` для остального (раздача `/data/report`).
-- Webhook-listener — кандидаты на реализацию (решить на этапе имплементации):
-  - Простейший вариант: небольшой shell+socat/netcat-скрипт — хрупко, не рекомендуется.
-  - Микро-сервис на чём-то лёгком, что не тянет за собой доп. рантайм — например, статически собранный Go-бинарник (webhook receiver) или Caddy же с плагином `exec`/встроенным скриптингом.
-  - Практичный вариант: **Python** (уже не нужен доп. рантайм, если решим тянуть его для скриптов автоопределения) **или** маленький Go-бинарь, собираемый в отдельном build-stage под обе архитектуры (кросс-компиляция Go тривиальна для amd64/arm64).
-  - **Предварительное решение: Go-бинарник** — раз всё равно собираем multi-arch, Go даёт нативный arm64-бинарь без всякой эмуляции для этой части, и это самый маленький/предсказуемый компонент.
-- Логика: принять POST → (если `WEBHOOK_SECRET` задан) проверить подпись/токен (поддержать хотя бы GitHub-style `X-Hub-Signature-256`, GitLab-style `X-Gitlab-Token`) → поставить в очередь-однослот (если генерация уже идёт — просто отметить «нужен ещё один прогон после», не плодить параллельные процессы) → запустить `generate.sh` → ответить 202 сразу, не дожидаясь конца генерации (генерация может быть долгой на модели большого размера).
-- Дать эндпоинт статуса, например `GET /status` — время последней успешной генерации, идёт ли генерация сейчас, последняя ошибка (полезно для мониторинга).
+**Реализовано в M3 (§19), как описано ниже — раздел приведён в соответствие с итоговым кодом.**
+
+- Отдельный лёгкий HTTP-эндпоинт, реализованный **Go-бинарником** (`docker/webhook/main.go`, stdlib only, без внешних зависимостей — раз всё равно собираем multi-arch, Go даёт нативный arm64-бинарь без всякой эмуляции для этой части, и это самый маленький/предсказуемый компонент). Слушает только `127.0.0.1:8088`, наружу не торчит — единственный публичный порт `PORT` держит Caddy.
+- Caddy (`docker/Caddyfile`): `handle {$WEBHOOK_PATH:/webhook}* { reverse_proxy 127.0.0.1:8088 }` + `handle /status { reverse_proxy 127.0.0.1:8088 }` + `handle { file_server }` для остального (раздача `/data/report`) — один порт наружу для пользователя.
+- `WEBHOOK_PROVIDER=github|gitlab|generic` — явный выбор способа проверки `WEBHOOK_SECRET` (не автоопределение по заголовкам): `github` → HMAC-SHA256 тела запроса, `X-Hub-Signature-256: sha256=<hex>`; `gitlab` → прямое constant-time сравнение `X-Gitlab-Token`; `generic` → `X-Webhook-Secret`-заголовок или `?secret=` query-параметр, тоже constant-time. Если `WEBHOOK_SECRET` задан, а `WEBHOOK_PROVIDER` — нет (или не из трёх значений), контейнер падает при старте с понятной ошибкой.
+- Listener не дублирует git-логику: по успешной проверке запускает `/usr/local/bin/generate.sh` как subprocess, переиспользуя окружение контейнера (`GIT_*`/`MODEL_*`, заданные один раз через `docker run -e`).
+- Однослотовая очередь-дебаунс: если генерация уже идёт, второй триггер просто помечает «догнать» — второй прогон запускается сразу после первого, без параллельного запуска. Ответ `202 Accepted` отдаётся сразу, не дожидаясь конца генерации.
+- `GET /status` — JSON `{generating, last_run_at, last_success, last_error}`.
 
 ## 9. Веб-сервер и раздача отчёта
 
@@ -164,10 +165,13 @@
   - [x] Проверить arm64-путь на реальном хосте (Raspberry Pi 5) — **box64-эмуляция отклонена** (упирается в открытый upstream-баг box64, см. §15.9), но **нативная Tycho-сборка под `linux/gtk/aarch64` подтверждена рабочей end-to-end** — валидный отчёт без единого краша. См. §15.10. Стратегия для M4 определена.
 - **M1 — amd64 MVP** — ✅ пройден, 2026-08-19, детали в §17.
   - [x] Dockerfile только под amd64: клон plain-репозитория по токену → генерация → раздача статикой через Caddy без вебхука. Ручной `docker run`.
-- **M2 — форматы + секреты**
-  - Автоопределение plain/coArchi, все три способа авторизации git, `MODEL_PATH`/`MODEL_FORMAT` оверрайды.
-- **M3 — вебхук**
-  - Go webhook-listener, единый порт через Caddy, debounce/однослотовая очередь, `/status`.
+- **M2 — форматы + секреты** — ✅ пройден, 2026-08-19, детали в §18.
+  - [x] Автоопределение plain/coArchi, `MODEL_PATH`/`MODEL_FORMAT` оверрайды — end-to-end на реальных контейнерах (§18, §18.2).
+  - [x] `GIT_TOKEN` (M1) и `GIT_USERNAME`+`GIT_PASSWORD` — валидированы против реального приватного репо.
+  - [ ] `GIT_SSH_PRIVATE_KEY` — код написан, `bash -n` пройден, но не прогнан end-to-end (нет тестового SSH-репо под рукой, отложено по решению пользователя, §18.1).
+- **M3 — вебхук** — ✅ пройден, 2026-08-19, детали в §19.
+  - [x] Go webhook-listener (`docker/webhook/main.go`, stdlib only), единый порт через Caddy (`reverse_proxy 127.0.0.1:8088`), `WEBHOOK_PROVIDER=github|gitlab|generic`.
+  - [x] Debounce/однослотовая очередь, `GET /status`, fail-fast entrypoint (оба процесса — `wait -n`) — всё подтверждено на реальных контейнерах (§19).
 - **M4 — arm64 + multi-arch публикация**
   - arm64-ветка через нативную Tycho-сборку (§5, §15.10), ручная (без CI, см. §16) `docker buildx build --platform linux/amd64,linux/arm64 --push` с тегами `:<ARCHI_VERSION>` и `:latest`, README на Docker Hub. Вопросы из §16 закрыты решениями пользователя от 2026-08-19; осталось выбрать Docker Hub namespace (§12, п.6).
 - **M5 — полировка**
@@ -450,4 +454,92 @@ j  org.eclipse.swt.widgets.Display.init()V+13
 - Логи Caddy подтверждённо видны в `docker logs` (без файлового вывода).
 
 **Вывод:** M1 полностью работает end-to-end на amd64. Следующий шаг — M2 (форматы + secrets: coArchi-автоопределение, SSH-ключ, username+password, `MODEL_FORMAT` оверрайд).
+
+## 18. Результаты M2: форматы модели + все методы авторизации (2026-08-19)
+
+Реализовано в `docker/generate.sh` (переписан полностью) и `docker/Dockerfile` (добавлена загрузка плагина coArchi).
+
+**Auth-методы:**
+- `GIT_TOKEN` (HTTPS, как в M1), `GIT_SSH_PRIVATE_KEY` (SSH, raw PEM или base64), `GIT_USERNAME`+`GIT_PASSWORD` (HTTPS). Взаимоисключающие — если задано больше одного, `generate.sh` падает с понятной ошибкой.
+- SSH: принимает как многострочный PEM (`grep '^-----BEGIN'`), так и base64-блоб; пишется в `/data/secrets/id_ssh` (600). `GIT_SSH_KNOWN_HOSTS` опционален — если задан, `StrictHostKeyChecking=yes` с явным known_hosts; если нет — `StrictHostKeyChecking=accept-new` (TOFU) с явным предупреждением в лог.
+- HTTPS username+password: логин/пароль URL-кодируются собственной bash-функцией `urlencode()` (посимвольный цикл, `printf '%%%02X'` для не-safe символов) — сознательно без `jq`, чтобы не тащить лишнюю apt-зависимость в образ.
+- Секреты никогда не попадают в argv процессов (видимых через `ps`/`docker top`) дольше одного присваивания переменной; собраны только в переменные окружения/временные файлы с правами 600.
+
+**Формат модели:**
+- `MODEL_FORMAT` (`auto`/`plain`/`coarchi`, по умолчанию `auto`) — форсирует или переопределяет автоопределение.
+- Автоопределение (без `MODEL_PATH`): сначала ищем `**/*.archimate` — 1 совпадение → `plain`; 0 совпадений → ищем `**/folder.xml`, чей корневой элемент `<archimate:ArchimateModel` → если найден и лежит в подкаталоге `model/` → `coarchi`; несколько `.archimate`-кандидатов → падаем, требуем явный `MODEL_PATH`.
+- `MODEL_PATH` для `plain` — путь к файлу `.archimate`; для `coarchi` — путь к **корню git-репозитория**, содержащему `model/folder.xml` (см. ниже почему именно корень, а не `model/`), с fallback: если явно указан сам `model/`-каталог, он автоматически поднимается на уровень выше.
+
+**Найденный и исправленный баг: coArchi требует корень репозитория, а не `model/`.**
+
+При первом прогоне M2-тестов (`GIT_URL=https://github.com/GLYCAM-Web/coArchi-GLYCAM-Web.git`, без `MODEL_PATH`) контейнер падал на генерации:
+```
+java.io.IOException: Model was not loaded
+    at com.archimatetool.reports.commandline.HTMLReportProvider.run(HTMLReportProvider.java:66)
+```
+несмотря на то, что автоопределение верно находило `coarchi`-формат и синтаксис CLI-вызова (`--modelrepository.loadModel <dir> --html.createReport <out>`) в точности совпадал с ранее провалидированным в M0-спайке (§15.7).
+
+Диагностика (шаги, в порядке выполнения):
+1. **Гипотеза «shallow clone несовместим с JGit»** — отвергнута. Локально (вне контейнера, с уже распакованным `Archi/Archi` + `xvfb-run` на хосте) воспроизвели `--depth 1`-клон и прогнали ту же CLI-команду — ошибка воспроизвелась. Прогнали затем **полный** (non-shallow) клон того же репозитория — ошибка воспроизвелась идентично. Shallow/full — не при чём.
+2. Дальше выяснилось, что при локальном прогоне вообще был задействован **не тот Archi**: в стек-трейсе фигурировал класс `org.archicontribs.modelrepository.commandline.LoadModelFromRepositoryProvider` — а этого плагина нет ни в скачиваемом `Archi-Linux64-<version>.tgz`, ни в `./Archi/plugins/` вообще. Он подхватился только потому, что на машине разработчика в `~/.archi/dropins/` случайно остался вручную установленный плагин coArchi 0.9.5 (артефакт прошлой работы с GUI Archi) — Archi читает user-area `~/.archi` по умолчанию. **Т.е. официальный `.tgz`-релиз Archi не включает coArchi вообще** — это отдельный плагин, распространяемый только как `.archiplugin` (zip) с archimatetool.com, без bundling и без версии в GitHub Releases API.
+3. Раз плагин локально всё же был доступен (через `~/.archi/dropins`), продолжили диагностику именно ошибки `Model was not found at <dir>/model` (при прогоне на *корне* репозитория, не на `model/`). Декомпилировали (`unzip` + `strings`, `javap` в системе не оказалось) `org.archicontribs.modelrepository.jar` → класс `ArchiRepository.locateModel()` жёстко хардкодит относительный путь **`"model/folder.xml"`** от переданного каталога. Значит `--modelrepository.loadModel` должен указывать на **корень репозитория** (родитель `model/`), а не на сам `model/`-каталог — именно поэтому попытки с `MODEL_DIR=<repo>/model` искали несуществующий `<repo>/model/model/folder.xml`.
+4. Подтверждено экспериментально: тот же CLI-вызов с `--modelrepository.loadModel "<repo-root>"` (без `/model`) на локально расшаренном полном клоне — успех, 34 view, `index.html` 317560 байт.
+
+**Итоговые правки:**
+- `docker/generate.sh`: `find_coarchi_dir()` теперь возвращает родителя найденного `model/folder.xml` (корень репо), а не сам `model/`. Ветки с явным `MODEL_PATH` для `coarchi`/`auto` тоже приведены к этой семантике, с понятным fallback и текстом ошибки, если `model/folder.xml` не найден под указанным путём.
+- `docker/Dockerfile`: добавлен build-arg `ARG COARCHI_VERSION=0.9.6` (пин, без auto-latest — у archimatetool.com нет JSON API релизов, как у GitHub) и шаг скачивания `https://www.archimatetool.com/downloads/coarchi/coArchi_${COARCHI_VERSION}.archiplugin` → `unzip` прямо в `/opt/archi/dropins/` (плюс новая apt-зависимость `unzip`). Комментарий поясняет, почему без этого шага `--modelrepository.loadModel` молча проваливается.
+
+**Результаты тестов (образ `archi-report:m2`):**
+- **Auth: `GIT_USERNAME`+`GIT_PASSWORD`** — против реального приватного репозитория `https://dev.teniaev.tech/archimate.git` (собственный проект пользователя). По ходу выяснилось, что «анонимный» `git ls-remote` с хоста был обманчив — успевал благодаря закэшированным в `~/.git-credentials` учётным данным (`credential.helper store`), а не потому что репозиторий публичный; внутри контейнера анонимный клон закономерно падал (`could not read Username`). Тест username+password прошёл успешно — пароль извлечён из `~/.git-credentials`, передан через `-e GIT_PASSWORD=...`, ни разу не выведен в лог/вывод инструментов, `unset` сразу после использования.
+  - Попутно найден и исправлен баг подсчёта `AUTH_METHODS`: `[ -n "$A" ] || [ -n "$B" ] && CMD` в bash разбирается как `A || (B && CMD)` (`&&` связывает крепче `||`) — при заданном `GIT_USERNAME` инкремент молча пропускался. Переписано явным `if ... || ...; then ...; fi`.
+- **coArchi-автоопределение + `--modelrepository.loadModel`** — против публичного `https://github.com/GLYCAM-Web/coArchi-GLYCAM-Web.git`, без `MODEL_PATH`. После фикса (см. выше): контейнер готов через 7 секунд, лог `[generate] using coArchi model directory: /data/repo` (корень, не `/data/repo/model` — подтверждает правильность фикса), `[HTMLReport] Report generated!` (34 view), `<title>GLYCAM-Web</title>`, `index.html` 317560 байт, HTTP 200.
+- **Не протестировано в этой итерации:** `GIT_SSH_PRIVATE_KEY` (нет доступного SSH-репозитория под рукой прямо сейчас), явный `MODEL_FORMAT=plain`/`MODEL_FORMAT=coarchi` оверрайд на неоднозначных репозиториях. Код написан и прошёл `bash -n`, но не прогнан end-to-end — стоит проверить перед переходом к M3/M4.
+
+**Вывод:** M2 работает end-to-end для двух из трёх auth-методов и для обоих форматов модели (plain — валидирован ещё в M1, coarchi — валидирован здесь). Главная находка итерации — coArchi требует бандлинга отдельного плагина в образ (без него ошибка на генерации выглядит как проблема с самой моделью, а не с отсутствующим плагином) и передачи корня репозитория, а не каталога `model/`, в `--modelrepository.loadModel`.
+
+### 18.1. Источник дистрибутива coArchi — проверены альтернативы, решение подтверждено (2026-08-19)
+
+Пользователь предложил проверить два альтернативных источника плагина вместо ручного пина версии с archimatetool.com.
+
+**GitHub Releases `archimatetool/archi-modelrepository-plugin` — не подходит, решение остаётся прежним.** Проверено через GitHub API (`/releases` и `/tags`):
+- Formal Releases в этом репозитории **остановились на `0.2.8` (сентябрь 2017)** — это и есть причина 404 на `/releases/latest` (GitHub этот эндпоинт не отдаёт, если последний релиз помечен `prerelease: true`, а там все 10 релизов до `0.2.8` включительно — prerelease). У каждого из них в `assets` — только голый `org.archicontribs.modelrepository_*.jar`, **без** `commandline`-подплагина, от которого зависит headless CLI (`--modelrepository.loadModel`).
+- Актуальные версии (`0.9.5`, `0.9.6` и новее) в этом репозитории существуют **только как git-теги**, под них никогда не публиковались GitHub Releases со сборранными ассетами.
+- Вывод: archimatetool.com (`.archiplugin`-архив, объединяющий ядро + commandline) остаётся единственным практичным источником актуальной версии с CLI-поддержкой. Оставлено как есть в Dockerfile — пин `ARG COARCHI_VERSION=0.9.6`, скачивание с `https://www.archimatetool.com/downloads/coarchi/coArchi_${COARCHI_VERSION}.archiplugin`. Официального JSON/API для "latest" там нет; auto-latest потребовал бы парсинга HTML-страницы `/plugins/` — не делали, посчитали не стоящим усложнения ради ручного пина, который и так уже обновляется вручную вместе с `ARCHI_VERSION`.
+
+**coArchi2 (`archimatetool/archi-modelrepository-plugin2`) — отклонён.** Это заявленный "next-gen"-преемник, но README прямо предупреждает: *"coArchi2 is a work in progress... do not use it in production"*; релизов нет вообще. Не используем, остаёмся на coArchi 1 (`org.archicontribs.modelrepository`, версия 0.9.6).
+
+**SSH-тест (`GIT_SSH_PRIVATE_KEY`) отложен по решению пользователя** — нет доступного тестового SSH-репозитория под рукой. Код в `generate.sh` написан и прошёл `bash -n`, но не прогнан end-to-end.
+
+### 18.2. `MODEL_FORMAT`-оверрайд протестирован end-to-end (2026-08-19)
+
+Четыре сценария на образе `archi-report:m2`, все — ожидаемый результат:
+
+1. **`MODEL_FORMAT=coarchi` + явный `MODEL_PATH=.`** (корень репо `GLYCAM-Web/coArchi-GLYCAM-Web`) — `[generate] using coArchi model directory: /data/repo/.`, HTTP 200, `index.html` 317560 байт. Совпадает с auto-детектом из §18.
+2. **Негативный: `MODEL_FORMAT=coarchi` + `MODEL_PATH=model`** (тот же репо, но путь указан прямо на `model/`-подкаталог) — намеренно строгая ветка (без снисхождения `auto`-режима) корректно упала с понятной ошибкой: `MODEL_FORMAT=coarchi but /data/repo/model/model/folder.xml is missing (MODEL_PATH must point at the repo root containing model/, not at model/ itself)`.
+3. **`MODEL_FORMAT=plain` + явный `MODEL_PATH=spikes/m0-cli-report/model/model.archimate`** против приватного `dev.teniaev.tech/archimate.git`, auth = `GIT_USERNAME`+`GIT_PASSWORD` — `[generate] using plain model file: ...`, `Report generated!`, HTTP 200, 6585 байт (та же M0-модель). Побочно: ранее предполагавшийся путь `main/spikes/...` оказался неверным (лишний `main/`-префикс) — проверено прямым клоном, реальный путь без ветки в начале.
+4. **Негативный: `MODEL_FORMAT=plain` без `MODEL_PATH`** на чисто coArchi-репозитории (`GLYCAM-Web`) — корректно упал: `MODEL_FORMAT=plain but no *.archimate file found in repo`.
+
+**Вывод: M2 полностью закрыт**, кроме сознательно отложенного SSH-теста (нет тестового репозитория). Auto-детект, оба явных формата, обе ошибочные ветки, два из трёх auth-методов — всё подтверждено на реальных контейнерах. Следующий шаг — **M3 (webhook)**.
+
+## 19. Результаты M3: webhook-listener (2026-08-19)
+
+Реализовано: `docker/webhook/main.go` (новый Go-бинарник, stdlib only, без внешних зависимостей) + `go.mod`; новый build-stage `webhook-builder` в `docker/Dockerfile` (`golang:1.23-alpine`, `CGO_ENABLED=0`, кросс-компилируется под `$TARGETARCH`); `docker/Caddyfile` — добавлены `handle {$WEBHOOK_PATH:/webhook}*` и `handle /status`, оба `reverse_proxy 127.0.0.1:8088` (listener слушает только на loopback, наружу не торчит); `docker/entrypoint.sh` — переписан на запуск двух долгоживущих процессов (`archi-webhook &`, `caddy run &`) с `wait -n` и fail-fast (падение любого из двух — падение всего контейнера, оба явно добиваются в конце). `plan.md` §7 — добавлена строка `WEBHOOK_PROVIDER`.
+
+**Дизайн, зафиксированный в этой итерации (см. также план M3 в истории сессии):**
+- `WEBHOOK_PROVIDER=github|gitlab|generic` — явный выбор, не автоопределение по заголовкам. Если `WEBHOOK_SECRET` задан, а `WEBHOOK_PROVIDER` — нет (или не из трёх значений) — контейнер падает при старте с понятной ошибкой (fail-fast, а не молча небезопасный вебхук).
+- Listener не дублирует git-логику — по триггеру просто запускает `/usr/local/bin/generate.sh` как subprocess, переиспользуя окружение контейнера.
+- Однослотовая очередь: `State.trigger()` — если генерация уже идёт, просто выставляет `pending`; `runLoop()` крутится, пока `pending` не станет `false`, без рекурсии и без параллельных запусков.
+
+**Результаты тестов (образ `archi-report:m3`, все — реальные контейнеры, публичный репозиторий `GLYCAM-Web/coArchi-GLYCAM-Web` для тестов 2–7):**
+
+1. **Сборка** — `docker build` проходит целиком, новый stage компилируется (~4.6s), финальный образ содержит оба бинарника (`archi-webhook`, `caddy`). `caddy validate --config /etc/caddy/Caddyfile` — `Valid configuration` (подтверждён синтаксис `handle {$WEBHOOK_PATH:/webhook}*` — плейсхолдер с `*` сразу после закрывающей скобки парсится корректно).
+2. **Без `WEBHOOK_SECRET`** — `/status` → 200 `{"generating":false,"last_run_at":null,...}`; `POST /webhook` → 404 (хендлер не зарегистрирован вовсе, трафик не долетает до listener-логики).
+3. **`WEBHOOK_PROVIDER=generic`** — без секрета → 401 `unauthorized`; с `X-Webhook-Secret: test123` → 202 `{"status":"accepted"}`, `/status` вскоре показывает `last_success:true` и свежий `last_run_at`, лог подтверждает повторный прогон `generate.sh`.
+4. **`WEBHOOK_PROVIDER=github`** — HMAC-SHA256 тело+секрет через `openssl dgst -sha256 -hmac`: неверная подпись → 401, верная (`X-Hub-Signature-256: sha256=<hex>`) → 202.
+5. **`WEBHOOK_PROVIDER=gitlab`** — `X-Gitlab-Token`: неверный → 401, верный (прямое совпадение с `WEBHOOK_SECRET`) → 202.
+6. **Debounce/однослотовая очередь** — второй `POST /webhook` во время уже идущей генерации сразу получил 202 (не заблокировался); `ps aux` внутри контейнера в этот момент показал ровно один `git`-процесс клонирования (не два параллельных); лог подтвердил, что `generate.sh` был запущен и завершён **дважды подряд**, без пересечения по времени (`running` → `succeeded` → `running` → `succeeded`).
+7. **Fail-fast** — намеренный `kill -9` процесса `archi-webhook` внутри работающего контейнера → контейнер целиком остановился (`docker inspect` → `exited`, `exitcode=137`), не завис в наполовину живом состоянии с работающим, но бесполезным Caddy.
+8. **Валидация `WEBHOOK_PROVIDER`** — `WEBHOOK_SECRET` задан, `WEBHOOK_PROVIDER` не задан → лог `WEBHOOK_SECRET is set but WEBHOOK_PROVIDER="" is not one of github|gitlab|generic`, контейнер падает (`exitcode=1`), Caddy тоже не остаётся висеть отдельно.
+
+**Вывод: M3 полностью закрыт.** Все 8 пунктов тест-плана (включая явно проверенный ранее нерешённый вопрос — синтаксис `handle`-блока в Caddyfile с плейсхолдером пути) подтверждены на реальных контейнерах. Следующий шаг — **M4 (arm64 native build + multi-arch publish)**.
 

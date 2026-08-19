@@ -12,8 +12,20 @@
 }
 
 :{$PORT} {
-	root * /data/report
-	file_server
+	# archi-webhook listens on 127.0.0.1:8088 only — it is never exposed
+	# directly, only reachable through this reverse proxy. /status is always
+	# routed there (even if WEBHOOK_SECRET is unset, in which case the
+	# listener just answers 404 for the webhook path itself).
+	handle {$WEBHOOK_PATH:/webhook}* {
+		reverse_proxy 127.0.0.1:8088
+	}
+	handle /status {
+		reverse_proxy 127.0.0.1:8088
+	}
+	handle {
+		root * /data/report
+		file_server
+	}
 	encode gzip
 
 	# No access-log directive here either — kept off to avoid disk growth.

@@ -1,6 +1,13 @@
-# M1 — amd64 MVP.
-# Clones a plain (non-coArchi) git repo by token, generates an HTML report
-# with Archi CLI, serves it via Caddy. No webhook yet (see plan.md M3/M4).
+# M3 — webhook-listener for on-push regeneration, on top of M1/M2 (clone +
+# format auto-detection + Archi CLI report generation + Caddy). See plan.md
+# for the full milestone history.
+
+FROM golang:1.23-alpine AS webhook-builder
+ARG TARGETARCH
+WORKDIR /src
+COPY webhook/go.mod webhook/main.go ./
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o /out/archi-webhook .
+
 
 FROM debian:trixie-slim AS archi-amd64
 
@@ -10,9 +17,18 @@ FROM debian:trixie-slim AS archi-amd64
 # --no-cache (or bump this arg) to actually pick up a new Archi release.
 ARG ARCHI_VERSION=latest
 
+# coArchi (org.archicontribs.modelrepository) is NOT bundled in the plain
+# Archi-Linux64 tgz — it's a separate plugin, distributed only as a versioned
+# .archiplugin (a zip) from archimatetool.com, with no "latest" API to query.
+# Pin and bump manually; check https://www.archimatetool.com/plugins/ for
+# the current release. Without it, --modelrepository.loadModel silently
+# fails to load any model (see plan.md M2 notes on the "Model was not
+# loaded" investigation).
+ARG COARCHI_VERSION=0.9.6
+
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends ca-certificates curl tar; \
+    apt-get install -y --no-install-recommends ca-certificates curl tar unzip; \
     rm -rf /var/lib/apt/lists/*; \
     if [ "$ARCHI_VERSION" = "latest" ]; then \
         LATEST_JSON=$(curl -fsSL https://api.github.com/repos/archimatetool/archi.io/releases/latest); \
@@ -25,7 +41,13 @@ RUN set -eux; \
     tar -xzf /tmp/archi.tgz -C /opt/archi --strip-components=1; \
     rm -f /tmp/archi.tgz; \
     chmod +x /opt/archi/Archi; \
-    echo "${ARCHI_VERSION}" > /opt/archi/.archi_version
+    echo "${ARCHI_VERSION}" > /opt/archi/.archi_version; \
+    curl -fsSL -o /tmp/coarchi.zip \
+      "https://www.archimatetool.com/downloads/coarchi/coArchi_${COARCHI_VERSION}.archiplugin"; \
+    mkdir -p /opt/archi/dropins; \
+    unzip -q /tmp/coarchi.zip -d /opt/archi/dropins; \
+    rm -f /tmp/coarchi.zip; \
+    echo "${COARCHI_VERSION}" > /opt/archi/.coarchi_version
 
 
 FROM debian:trixie-slim
@@ -56,11 +78,12 @@ RUN set -eux; \
     chmod +x /usr/local/bin/caddy
 
 COPY --from=archi-amd64 /opt/archi /opt/archi
+COPY --from=webhook-builder /out/archi-webhook /usr/local/bin/archi-webhook
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY generate.sh /usr/local/bin/generate.sh
 COPY Caddyfile /etc/caddy/Caddyfile
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/generate.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/generate.sh /usr/local/bin/archi-webhook
 
 # /data/repo    — working copy of the git repository
 # /data/report  — generated HTML report, served by Caddy

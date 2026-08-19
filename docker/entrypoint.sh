@@ -16,5 +16,20 @@ else
     log "REGENERATE_ON_START=false, reusing existing /data/report"
 fi
 
+log "starting archi-webhook (internal, proxied by caddy at ${WEBHOOK_PATH:-/webhook} and /status)"
+/usr/local/bin/archi-webhook &
+WEBHOOK_PID=$!
+trap 'kill "$WEBHOOK_PID" 2>/dev/null || true; kill "$CADDY_PID" 2>/dev/null || true' TERM INT
+
 log "starting caddy on :${PORT:-3000}"
-exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &
+CADDY_PID=$!
+
+# Either process exiting is fatal for the container — fail fast rather than
+# run half-alive (e.g. caddy up but webhook-listener dead, silently dropping
+# regeneration requests).
+wait -n "$WEBHOOK_PID" "$CADDY_PID"
+STATUS=$?
+kill "$WEBHOOK_PID" 2>/dev/null || true
+kill "$CADDY_PID" 2>/dev/null || true
+exit "$STATUS"
