@@ -173,5 +173,13 @@ RUN mkdir -p /data/repo /data/report /data/secrets
 ENV PORT=3000
 EXPOSE 3000
 
+# /status is served by archi-webhook (reverse-proxied through Caddy on $PORT,
+# see Caddyfile) and always answers — regardless of WEBHOOK_SECRET — with
+# JSON {generating, last_run_at, last_success, last_error}. A plain 200 is
+# enough here: it proves both Caddy and archi-webhook are alive and Caddy's
+# reverse_proxy to 127.0.0.1:8088 is working, without parsing the body.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD curl -fsS "http://127.0.0.1:${PORT}/status" || exit 1
+
 WORKDIR /opt/archi
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
