@@ -7,13 +7,13 @@ log() { echo "[entrypoint] $*" >&2; }
 REGENERATE_ON_START="${REGENERATE_ON_START:-true}"
 
 if [ "$REGENERATE_ON_START" = "true" ]; then
-    log "running initial generation"
-    /usr/local/bin/generate.sh
+	log "running initial generation"
+	/usr/local/bin/generate.sh
 elif [ ! -f /data/report/index.html ]; then
-    log "REGENERATE_ON_START=false but /data/report is empty — generating anyway (nothing to serve otherwise)"
-    /usr/local/bin/generate.sh
+	log "REGENERATE_ON_START=false but /data/report is empty — generating anyway (nothing to serve otherwise)"
+	/usr/local/bin/generate.sh
 else
-    log "REGENERATE_ON_START=false, reusing existing /data/report"
+	log "REGENERATE_ON_START=false, reusing existing /data/report"
 fi
 
 log "starting archi-webhook (internal, proxied by caddy at ${WEBHOOK_PATH:-/webhook} and /status)"
@@ -35,6 +35,7 @@ CADDY_PID=$!
 # regeneration requests).
 wait -n "$WEBHOOK_PID" "$CADDY_PID"
 STATUS=$?
+
 kill "$WEBHOOK_PID" 2>/dev/null || true
 kill "$CADDY_PID" 2>/dev/null || true
 exit "$STATUS"
