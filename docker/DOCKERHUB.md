@@ -64,6 +64,28 @@ docker run -d \
 `{generating, last_run_at, last_success, last_error}` — используется как
 healthcheck.
 
+### Тома
+
+Три рабочие директории, ни одна не объявлена `VOLUME` в образе — без явного
+монтирования это обычные слои контейнера, не переживающие `docker rm`:
+
+| Путь | Назначение | Монтировать? |
+|---|---|---|
+| `/data/report` | Готовый HTML-отчёт, который раздаёт Caddy | Да, если хотите, чтобы отчёт пережил пересоздание контейнера — особенно вместе с `REGENERATE_ON_START=false` |
+| `/data/repo` | Рабочая копия git-репозитория с моделью | Опционально — ускоряет повторные запуски (`git fetch` вместо полного `clone`) |
+| `/data/secrets` | Временные файлы авторизации (SSH-ключ/токен/пароль), права `600` | Нет — создаются заново из env-переменных при каждом запуске, монтирование только продлевает жизнь секретов на диске |
+
+```bash
+docker run -d \
+  --name archimate-report \
+  -p 3000:3000 \
+  -v archimate-report-data:/data/report \
+  -e GIT_URL=https://github.com/your-org/your-model-repo.git \
+  -e GIT_TOKEN=ghp_xxx \
+  -e REGENERATE_ON_START=false \
+  umkabeaf/archimate-report:latest
+```
+
 ### Теги образа
 
 - `:latest` — последняя опубликованная версия.
@@ -135,6 +157,29 @@ The report is available at `http://localhost:3000` a few seconds after start
 `GET /status` (same port as the report) returns JSON
 `{generating, last_run_at, last_success, last_error}` — used as the
 healthcheck.
+
+### Volumes
+
+Three working directories; none are declared as `VOLUME` in the image — without
+explicit mounting they're ordinary container layers that don't survive
+`docker rm`:
+
+| Path | Purpose | Mount it? |
+|---|---|---|
+| `/data/report` | Finished HTML report, served by Caddy | Yes, if you want the report to survive container recreation — especially with `REGENERATE_ON_START=false` |
+| `/data/repo` | Working copy of the model's git repository | Optional — speeds up subsequent runs (`git fetch` instead of a full `clone`) |
+| `/data/secrets` | Temporary auth material (SSH key/token/password), `600` perms | No — recreated from env vars on every run; mounting it only extends how long secrets sit on disk |
+
+```bash
+docker run -d \
+  --name archimate-report \
+  -p 3000:3000 \
+  -v archimate-report-data:/data/report \
+  -e GIT_URL=https://github.com/your-org/your-model-repo.git \
+  -e GIT_TOKEN=ghp_xxx \
+  -e REGENERATE_ON_START=false \
+  umkabeaf/archimate-report:latest
+```
 
 ### Image tags
 

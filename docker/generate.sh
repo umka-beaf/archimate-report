@@ -272,10 +272,17 @@ fi
 [ -f "$REPORT_TMP_DIR/index.html" ] || die "generation finished but $REPORT_TMP_DIR/index.html is missing"
 [ -s "$REPORT_TMP_DIR/index.html" ] || die "generation finished but index.html is empty (see archi issue #980)"
 
-# Atomic-ish swap: both renames are fast, so Caddy never serves a
-# half-written report dir (worst case it briefly serves the previous one).
-rm -rf "$REPORT_DIR.old"
-[ -d "$REPORT_DIR" ] && mv "$REPORT_DIR" "$REPORT_DIR.old"
-mv "$REPORT_TMP_DIR" "$REPORT_DIR"
-rm -rf "$REPORT_DIR.old"
+# Publish by replacing REPORT_DIR's *contents*, not the directory itself.
+# We used to rename the whole directory (mv REPORT_DIR -> REPORT_DIR.old,
+# mv REPORT_TMP_DIR -> REPORT_DIR), which is a single atomic rename when
+# REPORT_DIR is a plain directory — but fails with "Device or resource
+# busy" the moment REPORT_DIR is a bind-mounted volume (you can't rename a
+# mount point, only change what's inside it). Moving entries in is not one
+# atomic step, but the report is regenerated wholesale every run anyway, so
+# a brief window of mixed old/new files is an acceptable trade-off — and
+# it's the only approach that works whether or not /data/report is mounted.
+mkdir -p "$REPORT_DIR"
+find "$REPORT_DIR" -mindepth 1 -delete
+find "$REPORT_TMP_DIR" -mindepth 1 -maxdepth 1 -exec mv -t "$REPORT_DIR" {} +
+rmdir "$REPORT_TMP_DIR"
 log "report published to $REPORT_DIR"

@@ -89,6 +89,29 @@ curl -X POST "https://<ваш-домен>/webhook" \
 запускается параллельно — он выполнится сразу после текущего. Параллельные
 пуши не порождают гонку между двумя одновременными `git clone`/Archi CLI.
 
+## Тома
+
+В образе (`Dockerfile`) есть три рабочие директории. Ни одна не объявлена
+инструкцией `VOLUME` — то есть без явного монтирования это обычные слои
+контейнера, не переживающие `docker rm`:
+
+| Путь | Назначение | Монтировать? |
+|---|---|---|
+| `/data/report` | Готовый HTML-отчёт, который раздаёт Caddy | Да, если хотите, чтобы отчёт пережил пересоздание контейнера — особенно вместе с `REGENERATE_ON_START=false`, чтобы не ждать полной регенерации при каждом рестарте |
+| `/data/repo` | Рабочая копия git-репозитория с моделью | Опционально — при монтировании повторные запуски делают `git fetch` вместо полного `clone`, что быстрее на больших репозиториях |
+| `/data/secrets` | Временные файлы авторизации (SSH-ключ/токен/пароль), права `600` | Не монтируйте — создаются заново из env-переменных при каждом запуске `generate.sh`; volume тут только продлевает жизнь секретов на диске без пользы |
+
+```bash
+docker run -d \
+  --name archimate-report \
+  -p 3000:3000 \
+  -v archimate-report-data:/data/report \
+  -e GIT_URL=https://github.com/your-org/your-model-repo.git \
+  -e GIT_TOKEN=ghp_xxx \
+  -e REGENERATE_ON_START=false \
+  umkabeaf/archimate-report:latest
+```
+
 ## docker-compose
 
 ```yaml
@@ -128,6 +151,11 @@ services:
       retries: 3
       start_period: 30s
 
+    # /data/report — том, переживающий пересоздание контейнера (см. § «Тома»).
+    # /data/repo не монтируем — необязательно, ускоряет только повторные fetch.
+    volumes:
+      - archimate-report-data:/data/report
+
     environment:
       TZ: *tz
 
@@ -156,6 +184,9 @@ networks:
   common:
     external: true
     name: common
+
+volumes:
+  archimate-report-data:
 ```
 
 Сеть `common` объявлена как `external: true` — Compose её не создаёт сам, она

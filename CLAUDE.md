@@ -698,3 +698,56 @@ docker buildx build \
 
 **Вывод: реальный релиз выполнен.** `umkabeaf/archimate-report:5.9.0` и `umkabeaf/archimate-report:latest` — оба тега живые на Docker Hub, multi-arch (linux/amd64 + linux/arm64), собраны и опубликованы вручную без CI, как и было решено в §16.
 
+## 23. Баг с именованными томами в generate.sh — фикс и повторный релиз (2026-08-19)
+
+### 23.1. Баг
+
+При использовании docker-compose с именованными Docker-томами, смонтированными на `/data/repo` и `/data/report` (см. §21.4, пример compose из README), контейнер падал на этапе публикации отчёта:
+
+```
+mv: cannot move '/data/report' to '/data/report.old': Device or resource busy
+```
+
+**Причина:** старая стратегия атомарной публикации (`docker/generate.sh`) переименовывала саму директорию `REPORT_DIR` целиком — `mv REPORT_DIR REPORT_DIR.old`, `mv REPORT_TMP_DIR REPORT_DIR`. На обычной директории (как в M1–M5 тестах, где `/data/report` — просто слой контейнера, не volume) это один быстрый атомарный `rename(2)`, и Caddy никогда не видит отчёт в промежуточном состоянии. Но когда `REPORT_DIR` — точка монтирования Docker-тома (bind mount или named volume), её саму переименовать нельзя — можно только менять содержимое внутри неё. Это ровно тот случай, который не был протестирован в M1–M5: все end-to-end тесты гоняли образ без монтирования `/data/report` как volume, а сам том в §21.4/README документировался только на уровне рекомендации ("монтируйте, если хотите пережить пересоздание контейнера"), без прогона через реальный docker-compose с этим томом.
+
+### 23.2. Фикс
+
+`docker/generate.sh` — замена стратегии переименования директории на очистку и повторное наполнение её содержимого:
+
+```diff
+-# Atomic-ish swap: both renames are fast, so Caddy never serves a
+-# half-written report dir (worst case it briefly serves the previous one).
+-rm -rf "$REPORT_DIR.old"
+-[ -d "$REPORT_DIR" ] && mv "$REPORT_DIR" "$REPORT_DIR.old"
+-mv "$REPORT_TMP_DIR" "$REPORT_DIR"
+-rm -rf "$REPORT_DIR.old"
++# Publish by replacing REPORT_DIR's *contents*, not the directory itself.
++# We used to rename the whole directory (mv REPORT_DIR -> REPORT_DIR.old,
++# mv REPORT_TMP_DIR -> REPORT_DIR), which is a single atomic rename when
++# REPORT_DIR is a plain directory — but fails with "Device or resource
++# busy" the moment REPORT_DIR is a bind-mounted volume (you can't rename a
++# mount point, only change what's inside it). Moving entries in is not one
++# atomic step, but the report is regenerated wholesale every run anyway, so
++# a brief window of mixed old/new files is an acceptable trade-off — and
++# it's the only approach that works whether or not /data/report is mounted.
++mkdir -p "$REPORT_DIR"
++find "$REPORT_DIR" -mindepth 1 -delete
++find "$REPORT_TMP_DIR" -mindepth 1 -maxdepth 1 -exec mv -t "$REPORT_DIR" {} +
++rmdir "$REPORT_TMP_DIR"
+ log "report published to $REPORT_DIR"
+```
+
+Компромисс зафиксирован прямо в коде-комментарии: публикация больше не единый атомарный `rename(2)`, а последовательность `delete` + `mv` записей — в теории Caddy может отдать частично очищенную/заполненную директорию в узком окне между шагами. Признано приемлемым, т.к. отчёт целиком перегенерируется на каждом прогоне (не инкрементальное обновление), а окно — миллисекунды. Работает одинаково, смонтирован `/data/report` как volume или нет — фикс не вносит регрессии для немонтированного случая (§17–§21 тестов).
+
+Попутно (в рамках того же цикла правок, до этой сессии) в `README.md` и `docker/DOCKERHUB.md` добавлены секции «Тома»/«Volumes» — таблица с тремя рабочими директориями (`/data/report`, `/data/repo`, `/data/secrets`), их назначением и рекомендацией, монтировать ли каждую (см. текст файлов).
+
+### 23.3. Повторный релиз
+
+Тем же способом, что и в §22 (`docker buildx build --platform linux/amd64,linux/arm64 --push`, пин `ARCHI_VERSION=5.9.0`, без CI) собран и опубликован обновлённый образ с фиксом:
+
+- Оба тега — `umkabeaf/archimate-report:5.9.0` и `:latest` — указывают на один и тот же multi-arch manifest list `sha256:1f7496ba57efb99514b33976ab1a6ff642b8572c0b7e89317b91127b64f414fc` (amd64 `sha256:dc509dd67d197cb53acd9abdac96dbc856794a9e555876b9064606ac9ef72e55`, arm64 `sha256:55cf1adf6f6d2c9e4a850fd53cde76a5f281e4fb53635c0a68024d3db3afb6a4`).
+- arm64 Tycho/Maven-сборка заняла **~10:56 мин** в этом прогоне — дольше, чем 6:42 мин в §22 и 3:26 мин в спайке §15.10, вероятно из-за холодного `~/.m2` BuildKit-кеша именно на этом builder-инстансе (кеш — per-builder состояние, не переживает между независимо созданными buildx-builder'ами, см. §16 п.2).
+- Пуш прошёл без ошибок, подтверждён через мониторинг реального процесса сборки (не только через уведомление харнесса — см. технический нюанс в §22, тот же паттерн проверки применён и здесь).
+
+**Вывод:** баг с именованными томами исправлен и подтверждён фиксом в коде; обновлённый образ, содержащий фикс, опубликован под теми же тегами (`:5.9.0`, `:latest`) на Docker Hub, оба тега указывают на общий manifest list. Документация (README/DOCKERHUB) дополнена секцией про тома в рамках того же цикла.
+
