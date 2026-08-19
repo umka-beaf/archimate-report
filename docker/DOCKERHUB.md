@@ -47,7 +47,7 @@ docker run -d \
 | `MODEL_FORMAT` | нет | `auto` (по умолчанию) / `plain` / `coarchi` |
 | `GIT_TOKEN` | нет* | HTTPS-токен (PAT) |
 | `GIT_USERNAME` / `GIT_PASSWORD` | нет* | логин+пароль для HTTPS |
-| `GIT_SSH_PRIVATE_KEY` | нет* | приватный SSH-ключ (PEM или base64) |
+| `GIT_SSH_PRIVATE_KEY` | нет* | приватный SSH-ключ (PEM или base64) ⚠️ пока не протестировано end-to-end |
 | `GIT_SSH_KNOWN_HOSTS` | нет | содержимое known_hosts; без него — TOFU (`accept-new`) |
 | `WEBHOOK_SECRET` | нет | если задан — включает `/webhook` |
 | `WEBHOOK_PROVIDER` | нет** | `github` / `gitlab` / `generic` — обязателен, если задан `WEBHOOK_SECRET` |
@@ -141,7 +141,7 @@ The report is available at `http://localhost:3000` a few seconds after start
 | `MODEL_FORMAT` | no | `auto` (default) / `plain` / `coarchi` |
 | `GIT_TOKEN` | no* | HTTPS token (PAT) |
 | `GIT_USERNAME` / `GIT_PASSWORD` | no* | login+password for HTTPS |
-| `GIT_SSH_PRIVATE_KEY` | no* | private SSH key (PEM or base64) |
+| `GIT_SSH_PRIVATE_KEY` | no* | private SSH key (PEM or base64) ⚠️ not tested end-to-end yet |
 | `GIT_SSH_KNOWN_HOSTS` | no | known_hosts content; without it — TOFU (`accept-new`) |
 | `WEBHOOK_SECRET` | no | if set, enables `/webhook` |
 | `WEBHOOK_PROVIDER` | no** | `github` / `gitlab` / `generic` — required if `WEBHOOK_SECRET` is set |

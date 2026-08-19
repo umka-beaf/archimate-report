@@ -105,16 +105,43 @@ func (s *State) runLoop() {
 }
 
 func runGenerateOnce() error {
+	// Tee stderr into a small buffer alongside the normal docker-logs stream,
+	// so a failure's /status.last_error can carry generate.sh's actual
+	// diagnostic line (e.g. "die: ...") instead of just Go's generic
+	// "exit status 1" — that string alone told an operator nothing without
+	// also going to grep docker logs.
+	var stderrBuf strings.Builder
 	cmd := exec.Command("/usr/local/bin/generate.sh")
 	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stderr = io.MultiWriter(os.Stderr, &stderrBuf)
 	logf("[webhook] running generate.sh")
 	if err := cmd.Run(); err != nil {
 		logf("[webhook] generate.sh failed: %v", err)
-		return err
+		return fmt.Errorf("%v: %s", err, lastNonEmptyLine(stderrBuf.String()))
 	}
 	logf("[webhook] generate.sh succeeded")
 	return nil
+}
+
+// lastNonEmptyLine returns the last non-blank line of s, truncated to a
+// reasonable length for a JSON status field. generate.sh's die() writes its
+// message as the final stderr line before exiting, so this is normally the
+// actual human-readable reason for the failure (e.g. "die: model repository
+// clone failed after 3 attempts") rather than raw Java stack-trace noise.
+func lastNonEmptyLine(s string) string {
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		const maxLen = 300
+		if len(line) > maxLen {
+			line = line[:maxLen] + "…"
+		}
+		return line
+	}
+	return "(no diagnostic output captured)"
 }
 
 // verifyGitHub checks the GitHub-style X-Hub-Signature-256 header:

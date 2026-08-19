@@ -35,7 +35,7 @@ docker run -d \
 | `MODEL_FORMAT` | нет | `auto` (по умолчанию) / `plain` / `coarchi` |
 | `GIT_TOKEN` | нет* | HTTPS-токен (PAT) |
 | `GIT_USERNAME` / `GIT_PASSWORD` | нет* | логин+пароль для HTTPS |
-| `GIT_SSH_PRIVATE_KEY` | нет* | приватный SSH-ключ (PEM или base64) |
+| `GIT_SSH_PRIVATE_KEY` | нет* | приватный SSH-ключ (PEM или base64) ⚠️ не протестировано end-to-end, будет позже (см. CLAUDE.md §18.1) |
 | `GIT_SSH_KNOWN_HOSTS` | нет | содержимое known_hosts; без него — TOFU (`accept-new`) |
 | `WEBHOOK_SECRET` | нет | если задан — включает `/webhook` |
 | `WEBHOOK_PROVIDER` | нет** | `github` / `gitlab` / `generic` — обязателен, если задан `WEBHOOK_SECRET` |
