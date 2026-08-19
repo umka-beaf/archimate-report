@@ -52,6 +52,43 @@ docker run -d \
 `{generating, last_run_at, last_success, last_error}` — используется
 Docker-контейнером как healthcheck.
 
+## Вебхук
+
+Без `WEBHOOK_SECRET` эндпоинт `/webhook` вообще не зарегистрирован (запрос на
+него отдаёт 404) — безопасный дефолт, ничего не включается по умолчанию.
+Если `WEBHOOK_SECRET` задан, `WEBHOOK_PROVIDER` обязателен — контейнер
+падает при старте с понятной ошибкой, если он не задан или задан неверно.
+Способ проверки подписи зависит от провайдера:
+
+| `WEBHOOK_PROVIDER` | Как проверяется | Заголовок/параметр |
+|---|---|---|
+| `github` | HMAC-SHA256 тела запроса с `WEBHOOK_SECRET` в качестве ключа | `X-Hub-Signature-256: sha256=<hex>` |
+| `gitlab` | Прямое constant-time сравнение с `WEBHOOK_SECRET` | `X-Gitlab-Token: <secret>` |
+| `generic` | Прямое constant-time сравнение с `WEBHOOK_SECRET` | заголовок `X-Webhook-Secret: <secret>` или `?secret=<secret>` в query |
+
+Путь эндпоинта настраивается через `WEBHOOK_PATH` (по умолчанию `/webhook`).
+Успешный запрос сразу отвечает `202 Accepted` — генерация запускается
+асинхронно, ответ не ждёт её завершения. Прогресс/результат смотрите через
+`GET /status`.
+
+**Настройка в GitHub**: Settings → Webhooks → Add webhook, Payload URL —
+`https://<ваш-домен>/webhook`, Content type — `application/json`, Secret —
+значение `WEBHOOK_SECRET`, событие — `push`.
+
+**Настройка в GitLab**: Settings → Webhooks, URL — `https://<ваш-домен>/webhook`,
+Secret token — значение `WEBHOOK_SECRET`, триггер — `Push events`.
+
+**Ручной вызов для проверки** (`generic`-провайдер):
+
+```bash
+curl -X POST "https://<ваш-домен>/webhook" \
+  -H "X-Webhook-Secret: change-me"
+```
+
+Однослотовая очередь-дебаунс: если генерация уже идёт, второй прогон не
+запускается параллельно — он выполнится сразу после текущего. Параллельные
+пуши не порождают гонку между двумя одновременными `git clone`/Archi CLI.
+
 ## docker-compose
 
 ```yaml

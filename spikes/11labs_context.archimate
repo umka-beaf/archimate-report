@@ -1,0 +1,367 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<archimate:model xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:archimate="http://www.archimatetool.com/archimate" name="11labs_context" id="id-64dfca2b91094b66a8df072af06328e2" version="5.0.0">
+  <purpose>## ElevenLabs Voice Agent — Контекстное обогащение из баз данных
+
+### Назначение модели
+
+Модель описывает архитектуру системы, обеспечивающей AI-голосовым агентам ElevenLabs доступ к данным из существующих корпоративных баз данных в режиме реального времени — во время активного телефонного разговора.
+
+---
+
+### Проблема
+
+Входящие звонки обрабатываются AI-агентом ElevenLabs. Агент ведёт диалог, но не имеет доступа к данным о клиенте: кто звонит, какие у него заказы, какой статус обращений. Без этих данных качество диалога ограничено — агент не может персонализировать ответы.
+
+---
+
+### Решение
+
+Между голосовым агентом и базами данных устанавливается промежуточный слой — DreamFactory — платформа генерации REST API поверх существующих БД. DreamFactory подключается к MySQL (CRM) и PostgreSQL (сервисные базы) через GUI без написания кода и предоставляет единое защищённое REST API.
+
+Во время диалога агент ElevenLabs выполняет REST-запросы к DreamFactory, получая данные о клиенте по номеру телефона (CLI/ANI), и встраивает их в контекст разговора.
+
+---
+
+### Компоненты системы
+
+| Компонент | Роль | Технология |
+|---|---|---|
+| ElevenLabs Voice Agent | AI-агент, ведущий диалог | SaaS, облако ElevenLabs |
+| DreamFactory | REST API gateway поверх БД | PHP/Laravel, Docker |
+| MySQL — CRM | База данных клиентов и заказов | Только чтение |
+| PostgreSQL — Сервисы | Сервисные базы данных | Только чтение |
+| Redis | Кэш и очереди DreamFactory | Существующий контейнер |
+| Caddy | Reverse proxy, TLS | Существующий контейнер |
+
+---
+
+### Сценарий (Use Case): Поиск заказов по номеру телефона
+
+1. Клиент звонит — ElevenLabs получает номер телефона (CLI/ANI)
+2. Агент формирует REST-запрос: GET /api/v2/mysql/_table/orders?filter=phone=+7XXXXXXXXXX
+3. DreamFactory выполняет SQL к MySQL CRM (read-only)
+4. DreamFactory возвращает JSON с историей заказов
+5. Агент встраивает данные в контекст и отвечает клиенту персонализированно
+
+---
+
+### Безопасность
+
+- DreamFactory не открыт напрямую в интернет — доступ только через Caddy
+- Все подключения к БД — только на чтение (read-only credentials)
+- Аутентификация запросов агента — API Key в заголовке X-DreamFactory-API-Key
+- Docker-сеть common изолирует трафик между контейнерами
+
+---
+
+### Развёртывание
+
+docker compose -f dreamfactory.yml up -d
+
+Перед первым запуском:
+- Создать базу dreamfactory в PostgreSQL
+- Сгенерировать APP_KEY: php artisan key:generate --show
+- Сгенерировать JWT_SECRET: openssl rand -hex 32
+- Подставить значения в dreamfactory.yml
+
+---
+
+### Файлы проекта
+
+| Файл | Описание |
+|---|---|
+| dreamfactory.yml | Docker Compose стек DreamFactory |
+| directus.yml | Docker Compose стек Directus (альтернатива, исследование) |
+| archimate/11labs_context.archimate | Данная ArchiMate-модель |
+| deploy-archimate.sh | Деплой модели на сервер через rsync |
+
+---
+
+### Диаграммы модели
+
+1. Компонентный состав — структура приложений и их взаимосвязи
+2. Dataflow — поток данных от звонка до ответа агента
+3. Use Case: Поиск заказов — пошаговый сценарий получения данных по номеру телефона
+4. Deployment — физическое размещение компонентов (сервер, Docker, облако ElevenLabs)</purpose>
+  <folder name="Strategy" id="id-9ab800ad8dec42e48259f6625285b2cc" type="strategy"/>
+  <folder name="Business" id="id-680ba8411ebc48f69a13e8ed7fa1fa43" type="business">
+    <element xsi:type="archimate:BusinessActor" name="Звонящий клиент" id="id-459205d3a703dcd1fcb110a963bb182d">
+      <documentation>Физическое лицо, совершающее входящий звонок. Является инициатором взаимодействия. Идентифицируется по номеру телефона, с которого осуществляется звонок.</documentation>
+    </element>
+    <element xsi:type="archimate:BusinessProcess" name="Обработка входящего звонка" id="id-5e64ce4d0ee5b69f9b20856916738434">
+      <documentation>Сквозной бизнес-процесс приёма и обработки входящего звонка. Включает идентификацию звонящего, ведение диалога агентом ElevenLabs, обогащение контекста данными из CRM и сервисных баз, а также ответ на запрос клиента.</documentation>
+    </element>
+    <element xsi:type="archimate:BusinessProcess" name="Обогащение контекста диалога" id="id-13d30ce8d9ed219d0bf74e6c11ba813c">
+      <documentation>Подпроцесс, выполняемый во время активного диалога. Агент определяет необходимость получения дополнительных данных (например, история заказов), формирует REST-запрос к DreamFactory и встраивает полученные данные в контекст разговора.</documentation>
+    </element>
+    <element xsi:type="archimate:BusinessService" name="Консультация по заказам" id="id-602d3de277b7a782c69bea997c9a7ac4">
+      <documentation>Бизнес-сервис, предоставляемый клиенту в ходе звонка: ответы на вопросы о статусе заказов, истории покупок, доставке. Реализуется AI-агентом с опорой на данные из CRM, получаемые через DreamFactory REST API.</documentation>
+    </element>
+    <element xsi:type="archimate:BusinessObject" name="Данные клиента" id="id-6b18be5ed49d0a5ea1e5e2bbcf84f0a0">
+      <documentation>Бизнес-объект, представляющий совокупность информации о клиенте: профиль, история заказов, контактные данные. Хранится в MySQL CRM. Используется агентом для персонализации диалога.</documentation>
+    </element>
+  </folder>
+  <folder name="Application" id="id-e688e48c3cee4674b246841931fde452" type="application">
+    <element xsi:type="archimate:ApplicationComponent" name="ElevenLabs Voice Agent" id="id-fe608c11fb2f07ce70b37c32cb23b641">
+      <documentation>AI-агент голосовой коммуникации на платформе ElevenLabs. Принимает входящие звонки, ведёт диалог на основе заданного сценария. В процессе разговора может инициировать REST-запросы к внешним API для получения контекстных данных о клиенте. Работает в облаке ElevenLabs.</documentation>
+    </element>
+    <element xsi:type="archimate:ApplicationComponent" name="DreamFactory API Platform" id="id-cd9b9b531f8f4806799d5bc794cbab46">
+      <documentation>Платформа автоматической генерации REST API поверх реляционных баз данных. Подключается к MySQL (CRM) и PostgreSQL (сервисные базы), интроспектирует схему и предоставляет документированные REST-эндпоинты с контролем доступа на уровне ролей, таблиц и полей. Развёртывается в Docker за Caddy.</documentation>
+    </element>
+    <element xsi:type="archimate:ApplicationInterface" name="REST API (DreamFactory)" id="id-fe6d5c7216424ddcb48fdb3a3a96dd31">
+      <documentation>Точка доступа к данным через HTTP REST. Базовый путь: /api/v2/{service_name}/{table}. Поддерживает фильтрацию (?filter=phone_number=X), пагинацию (?limit=, ?offset=) и выбор полей (?fields=). Аутентификация — Bearer-токен или API Key в заголовке X-DreamFactory-API-Key.</documentation>
+    </element>
+    <element xsi:type="archimate:ApplicationFunction" name="Автогенерация REST API из схемы БД" id="id-a82b419796eb04b914d99b571a96a311">
+      <documentation>Функция DreamFactory: при подключении базы данных выполняется интроспекция схемы (таблицы, колонки, внешние ключи). На основе схемы автоматически генерируются CRUD-эндпоинты, OpenAPI-спецификация и схема GraphQL. Изменения в БД подхватываются при повторной синхронизации.</documentation>
+    </element>
+    <element xsi:type="archimate:ApplicationFunction" name="Поиск клиента по номеру телефона" id="id-19486fb672de535d48a0e2c9dd21c6d1">
+      <documentation>Прикладная функция, реализующая поиск записей клиента по номеру телефона звонящего. Выполняется DreamFactory через SQL-запрос к таблице CRM: GET /api/v2/crm/customers?filter=phone={номер}. Возвращает профиль клиента и связанные заказы.</documentation>
+    </element>
+    <element xsi:type="archimate:ApplicationService" name="Сервис поиска заказов" id="id-d7e015dd2af3cf49fb2c8cab009637a8">
+      <documentation>Прикладной сервис, экспонируемый DreamFactory для получения истории заказов клиента. Принимает номер телефона, возвращает список заказов с деталями (статус, сумма, дата, состав). Используется агентом ElevenLabs для ответа на вопросы клиента о его заказах.</documentation>
+    </element>
+    <element xsi:type="archimate:DataObject" name="Номер телефона звонящего" id="id-7295a6d6f92c526be12377f5bee7719d">
+      <documentation>Входной параметр запроса. Передаётся платформой ElevenLabs агенту в момент соединения как метаданные звонка (CLI / ANI). Используется как ключ поиска в CRM для идентификации клиента без необходимости его самоидентификации.</documentation>
+    </element>
+    <element xsi:type="archimate:DataObject" name="Профиль клиента" id="id-037e931b359454fd2c2781f97b33ee87">
+      <documentation>Структурированные данные о клиенте из таблицы CRM: имя, контакты, сегмент, дата регистрации, менеджер. Извлекаются DreamFactory из MySQL и передаются агенту для персонализации приветствия и диалога.</documentation>
+    </element>
+    <element xsi:type="archimate:DataObject" name="Заказы клиента" id="id-1aa8f575eed1541910df68b8a448545b">
+      <documentation>Список заказов клиента из CRM: номер заказа, дата, статус, сумма, состав, трекинг доставки. Извлекаются по customer_id, полученному из профиля клиента. Используются агентом для ответа на вопросы о конкретных заказах.</documentation>
+    </element>
+    <element xsi:type="archimate:DataObject" name="Контекст диалога" id="id-d40d0fea2f8b9a721f9ac816835ba15b">
+      <documentation>Динамически формируемый объект данных, содержащий накопленный контекст текущего разговора: транскрипт, профиль клиента, заказы, выявленные намерения. Обновляется агентом по мере поступления данных из API. Используется LLM для генерации релевантных ответов.</documentation>
+    </element>
+  </folder>
+  <folder name="Technology &amp; Physical" id="id-fa16adae62c044b8886f7ef7660ed842" type="technology">
+    <element xsi:type="archimate:Node" name="Сервер приложений" id="id-d80085cae902f5e4853a66d42808fd55">
+      <documentation>Физический или виртуальный сервер, на котором развёрнуты контейнеры DreamFactory, Caddy, Redis и PostgreSQL (системная БД). Входит во внутреннюю сеть Docker (common). Изолирован от внешних сетей — входящий трафик проходит только через Caddy.</documentation>
+    </element>
+    <element xsi:type="archimate:Node" name="Облако ElevenLabs" id="id-f7edcd320fd587c87ead3266dbe53f92">
+      <documentation>Облачная инфраструктура платформы ElevenLabs, в которой выполняется Voice Agent. Принимает входящие звонки через VoIP/SIP, запускает LLM-диалоговый движок, инициирует исходящие HTTPS-запросы к внешним API для обогащения контекста.</documentation>
+    </element>
+    <element xsi:type="archimate:SystemSoftware" name="Caddy Reverse Proxy" id="id-e8dcca192313b9175783bf1f66c102b1">
+      <documentation>Обратный прокси-сервер Caddy, развёрнутый в Docker. Терминирует TLS, проксирует HTTPS-запросы от ElevenLabs Agent на DreamFactory (порт 80 контейнера). Обеспечивает автоматический выпуск и обновление TLS-сертификатов (Let&apos;s Encrypt). Является единственной точкой входа извне.</documentation>
+    </element>
+    <element xsi:type="archimate:SystemSoftware" name="DreamFactory (контейнер Docker)" id="id-d0dc8a9a20a49df82cfca1faa11a1839">
+      <documentation>Docker-контейнер с DreamFactory API Platform (PHP/Laravel + Nginx). Слушает на порту 80 внутри сети Docker. Подключается к MySQL CRM и PostgreSQL сервисной базе как read-only источникам данных. Системная база метаданных — отдельный PostgreSQL-контейнер.</documentation>
+    </element>
+    <element xsi:type="archimate:SystemSoftware" name="MySQL — CRM" id="id-5f24bda2b746955182e7f662b08725b2">
+      <documentation>СУБД MySQL, содержащая CRM-данные: клиенты, заказы, контакты, история взаимодействий. Подключается к DreamFactory как read-only источник данных (пользователь с правами SELECT). DreamFactory не изменяет схему и данные этой базы.</documentation>
+    </element>
+    <element xsi:type="archimate:SystemSoftware" name="PostgreSQL — Сервисы" id="id-51c3399fb0737b872df25cf4111eba67">
+      <documentation>СУБД PostgreSQL, содержащая данные внутренних сервисов: склад, логистика, финансы и прочие операционные данные. Подключается к DreamFactory как read-only источник данных. Используется для обогащения контекста агента данными, выходящими за рамки CRM.</documentation>
+    </element>
+    <element xsi:type="archimate:SystemSoftware" name="Redis (кэш DreamFactory)" id="id-1c35326ad6309c12ec732e360ed8bdee">
+      <documentation>Существующий контейнер Redis, используемый DreamFactory для кэширования результатов запросов, ограничения частоты запросов (rate limiting) и очередей. Снижает нагрузку на MySQL и PostgreSQL при повторяющихся запросах к одним данным.</documentation>
+    </element>
+    <element xsi:type="archimate:CommunicationNetwork" name="Интернет / VoIP" id="id-8fc94b623292a8a04b138cbe4bdd090e">
+      <documentation>Публичная сеть передачи данных и VoIP-инфраструктура. Используется для приёма входящих звонков на номер клиента и для HTTPS-вызовов от ElevenLabs Agent к Caddy Reverse Proxy. Трафик к API защищён TLS.</documentation>
+    </element>
+    <element xsi:type="archimate:CommunicationNetwork" name="Сеть Docker (common)" id="id-585209d607f44cf8a9d1eca029b58cf5">
+      <documentation>Внутренняя overlay-сеть Docker с именем &quot;common&quot;. Обеспечивает изолированную связь между контейнерами: Caddy, DreamFactory, Redis, PostgreSQL. Контейнеры недоступны извне — только через Caddy. Сеть объявлена как external и используется совместно несколькими compose-стеками.</documentation>
+    </element>
+  </folder>
+  <folder name="Motivation" id="id-77c63464b43647258d5c07df5b639082" type="motivation"/>
+  <folder name="Implementation &amp; Migration" id="id-6e6629fba64a45ebac6c8f23c391101d" type="implementation_migration"/>
+  <folder name="Other" id="id-bc25aa8953c449379fb7dc420ddcc5a8" type="other"/>
+  <folder name="Relations" id="id-2a5b52af36234ef09bb8bae262b95fac" type="relations">
+    <element xsi:type="archimate:TriggeringRelationship" id="id-ac5c5bd070de925f75a8aeb9f6dba067" source="id-459205d3a703dcd1fcb110a963bb182d" target="id-5e64ce4d0ee5b69f9b20856916738434" name="инициирует звонок"/>
+    <element xsi:type="archimate:CompositionRelationship" id="id-dc4cf7dc9daf8794d09dbc624e7c9c7d" source="id-5e64ce4d0ee5b69f9b20856916738434" target="id-13d30ce8d9ed219d0bf74e6c11ba813c"/>
+    <element xsi:type="archimate:RealizationRelationship" id="id-0923a84977097bd8a46c15ed18ac836e" source="id-5e64ce4d0ee5b69f9b20856916738434" target="id-602d3de277b7a782c69bea997c9a7ac4"/>
+    <element xsi:type="archimate:AccessRelationship" id="id-4b55281f8f4a5b77a83f94b21ae485a1" source="id-602d3de277b7a782c69bea997c9a7ac4" target="id-6b18be5ed49d0a5ea1e5e2bbcf84f0a0" accessType="1"/>
+    <element xsi:type="archimate:RealizationRelationship" id="id-8e66cb38e1215e69cec8030f9e862623" source="id-fe608c11fb2f07ce70b37c32cb23b641" target="id-5e64ce4d0ee5b69f9b20856916738434"/>
+    <element xsi:type="archimate:RealizationRelationship" id="id-ea542d4a863465397880e85057591d9a" source="id-d7e015dd2af3cf49fb2c8cab009637a8" target="id-602d3de277b7a782c69bea997c9a7ac4"/>
+    <element xsi:type="archimate:ServingRelationship" id="id-fd71e38688b17fd68b2d4fced7433e3c" source="id-cd9b9b531f8f4806799d5bc794cbab46" target="id-fe608c11fb2f07ce70b37c32cb23b641" name="предоставляет REST API"/>
+    <element xsi:type="archimate:CompositionRelationship" id="id-cec3f73abaeb7b2bfab11facf1cf8d95" source="id-cd9b9b531f8f4806799d5bc794cbab46" target="id-fe6d5c7216424ddcb48fdb3a3a96dd31"/>
+    <element xsi:type="archimate:CompositionRelationship" id="id-5c0123959d96c8bf2546e3781748278e" source="id-cd9b9b531f8f4806799d5bc794cbab46" target="id-a82b419796eb04b914d99b571a96a311"/>
+    <element xsi:type="archimate:CompositionRelationship" id="id-f4dbfe1b23ab2129bb28db1996e5a497" source="id-cd9b9b531f8f4806799d5bc794cbab46" target="id-19486fb672de535d48a0e2c9dd21c6d1"/>
+    <element xsi:type="archimate:RealizationRelationship" id="id-de530bb89afc9b8c3ab0c4b247765541" source="id-19486fb672de535d48a0e2c9dd21c6d1" target="id-d7e015dd2af3cf49fb2c8cab009637a8"/>
+    <element xsi:type="archimate:TriggeringRelationship" id="id-13bbb8ca3c033088581caea989d59452" source="id-fe608c11fb2f07ce70b37c32cb23b641" target="id-19486fb672de535d48a0e2c9dd21c6d1" name="вызывает по REST"/>
+    <element xsi:type="archimate:FlowRelationship" id="id-01555e9cb87170386526d72af7883506" source="id-7295a6d6f92c526be12377f5bee7719d" target="id-037e931b359454fd2c2781f97b33ee87" name="ключ поиска"/>
+    <element xsi:type="archimate:FlowRelationship" id="id-58805897df3aab2f6a46bb4f5d3071e6" source="id-037e931b359454fd2c2781f97b33ee87" target="id-1aa8f575eed1541910df68b8a448545b" name="customer_id → заказы"/>
+    <element xsi:type="archimate:FlowRelationship" id="id-638b7849c4dbd6f5bec7b266380c5e60" source="id-1aa8f575eed1541910df68b8a448545b" target="id-d40d0fea2f8b9a721f9ac816835ba15b" name="обогащает контекст"/>
+    <element xsi:type="archimate:AssociationRelationship" id="id-801497f2dc1ffbb3e368c6662429665a" source="id-fe608c11fb2f07ce70b37c32cb23b641" target="id-7295a6d6f92c526be12377f5bee7719d" name="получает при входящем звонке"/>
+    <element xsi:type="archimate:AssociationRelationship" id="id-06d49b7236fe1d7fb70d70f5ad85cec0" source="id-cd9b9b531f8f4806799d5bc794cbab46" target="id-037e931b359454fd2c2781f97b33ee87" name="читает из MySQL"/>
+    <element xsi:type="archimate:AssociationRelationship" id="id-d48df230ce4e4eebe9c657cdf9147e94" source="id-cd9b9b531f8f4806799d5bc794cbab46" target="id-1aa8f575eed1541910df68b8a448545b" name="читает из MySQL"/>
+    <element xsi:type="archimate:AssociationRelationship" id="id-96e888bead8b2a2376ae5e75b3bbd808" source="id-fe608c11fb2f07ce70b37c32cb23b641" target="id-d40d0fea2f8b9a721f9ac816835ba15b" name="формирует и обновляет"/>
+    <element xsi:type="archimate:ServingRelationship" id="id-bf75713798bba0929e45da4cf858ad25" source="id-e8dcca192313b9175783bf1f66c102b1" target="id-d0dc8a9a20a49df82cfca1faa11a1839" name="проксирует HTTPS → HTTP"/>
+    <element xsi:type="archimate:ServingRelationship" id="id-901a112d2bc236756c6dc96214baa6f9" source="id-5f24bda2b746955182e7f662b08725b2" target="id-d0dc8a9a20a49df82cfca1faa11a1839" name="read-only доступ"/>
+    <element xsi:type="archimate:ServingRelationship" id="id-8ebbbe0c5141eda4517857bf2cd1a00e" source="id-51c3399fb0737b872df25cf4111eba67" target="id-d0dc8a9a20a49df82cfca1faa11a1839" name="read-only доступ"/>
+    <element xsi:type="archimate:ServingRelationship" id="id-3002ad8322ef6656cc143770f7d6fec2" source="id-1c35326ad6309c12ec732e360ed8bdee" target="id-d0dc8a9a20a49df82cfca1faa11a1839" name="кэш и очереди"/>
+    <element xsi:type="archimate:AssociationRelationship" id="id-c6c5f517adc1a369013e2ebe5607d239" source="id-f7edcd320fd587c87ead3266dbe53f92" target="id-8fc94b623292a8a04b138cbe4bdd090e"/>
+    <element xsi:type="archimate:AssociationRelationship" id="id-56b668d265db74734d44dd6944ef0e26" source="id-d80085cae902f5e4853a66d42808fd55" target="id-8fc94b623292a8a04b138cbe4bdd090e"/>
+    <element xsi:type="archimate:AssociationRelationship" id="id-9b920617034a05e451a070a1ec9c19aa" source="id-e8dcca192313b9175783bf1f66c102b1" target="id-585209d607f44cf8a9d1eca029b58cf5"/>
+    <element xsi:type="archimate:AssociationRelationship" id="id-20c833ce42a12388d2c018349d397650" source="id-d0dc8a9a20a49df82cfca1faa11a1839" target="id-585209d607f44cf8a9d1eca029b58cf5"/>
+    <element xsi:type="archimate:AssociationRelationship" id="id-eb6612569572b26b677af693ae458492" source="id-1c35326ad6309c12ec732e360ed8bdee" target="id-585209d607f44cf8a9d1eca029b58cf5"/>
+    <element xsi:type="archimate:CompositionRelationship" id="id-a666270bfe99d059d6d6ab767d2578fd" source="id-d80085cae902f5e4853a66d42808fd55" target="id-e8dcca192313b9175783bf1f66c102b1"/>
+    <element xsi:type="archimate:CompositionRelationship" id="id-6be43e83af9d402bdb44843df003374c" source="id-d80085cae902f5e4853a66d42808fd55" target="id-d0dc8a9a20a49df82cfca1faa11a1839"/>
+    <element xsi:type="archimate:CompositionRelationship" id="id-831618c4fb557af5e71bd305fda24430" source="id-d80085cae902f5e4853a66d42808fd55" target="id-1c35326ad6309c12ec732e360ed8bdee"/>
+  </folder>
+  <folder name="Views" id="id-085fdb5a37d4486ebbf55a52c0071fb2" type="diagrams">
+    <element xsi:type="archimate:ArchimateDiagramModel" name="1. Компонентный состав" id="id-d50274bd21703e73a8b4667aac5be7cf">
+      <documentation>Диаграмма компонентного состава системы. Показывает прикладные компоненты, их интерфейсы и функции в трёх слоях: Business (бизнес-актор, процессы, сервис, объект), Application (ElevenLabs Agent, DreamFactory, REST API, функции поиска, объекты данных) и Technology (инфраструктура сервера, сети, контейнеры). Цель — дать обзор статической структуры без детализации потоков данных.</documentation>
+      <child xsi:type="archimate:DiagramObject" id="id-b1ea6845cb4f9ad675b1220fe5d26f25" archimateElement="id-fe608c11fb2f07ce70b37c32cb23b641" targetConnections="id-d1b02a35a9526b156a7f63aa09bbf714">
+        <bounds x="48" y="168" width="160" height="60"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-910887062f66edca0e81319b93cea3e8" source="id-b1ea6845cb4f9ad675b1220fe5d26f25" target="id-ae631f0defdaa3e75eae90ec80b43503" archimateRelationship="id-13bbb8ca3c033088581caea989d59452"/>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-f8e118f0efdc3c61c7e2dc426a781f82" archimateElement="id-e8dcca192313b9175783bf1f66c102b1">
+        <bounds x="252" y="60" width="160" height="60"/>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-4b6560a7978696d03e6bce3662b0d1c8" archimateElement="id-cd9b9b531f8f4806799d5bc794cbab46">
+        <bounds x="470" y="50" width="190" height="240"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-d1b02a35a9526b156a7f63aa09bbf714" source="id-4b6560a7978696d03e6bce3662b0d1c8" target="id-b1ea6845cb4f9ad675b1220fe5d26f25" archimateRelationship="id-fd71e38688b17fd68b2d4fced7433e3c"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-eaec5ff4d65217bf66b525881eaee80e" source="id-4b6560a7978696d03e6bce3662b0d1c8" target="id-fbad1fa2c89b2641c98efd94352eb15a" archimateRelationship="id-cec3f73abaeb7b2bfab11facf1cf8d95"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-98890611170e0f4ea522c34ccb5b2829" source="id-4b6560a7978696d03e6bce3662b0d1c8" target="id-001d2ea7872d4d302def0cef3998431b" archimateRelationship="id-5c0123959d96c8bf2546e3781748278e"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-d31b3f065610d2e6eb24fc650a7b7970" source="id-4b6560a7978696d03e6bce3662b0d1c8" target="id-ae631f0defdaa3e75eae90ec80b43503" archimateRelationship="id-f4dbfe1b23ab2129bb28db1996e5a497"/>
+        <child xsi:type="archimate:DiagramObject" id="id-fbad1fa2c89b2641c98efd94352eb15a" archimateElement="id-fe6d5c7216424ddcb48fdb3a3a96dd31" targetConnections="id-eaec5ff4d65217bf66b525881eaee80e">
+          <bounds x="12" y="36" width="160" height="50"/>
+        </child>
+        <child xsi:type="archimate:DiagramObject" id="id-001d2ea7872d4d302def0cef3998431b" archimateElement="id-a82b419796eb04b914d99b571a96a311" targetConnections="id-98890611170e0f4ea522c34ccb5b2829">
+          <bounds x="12" y="96" width="160" height="61"/>
+        </child>
+        <child xsi:type="archimate:DiagramObject" id="id-ae631f0defdaa3e75eae90ec80b43503" archimateElement="id-19486fb672de535d48a0e2c9dd21c6d1" targetConnections="id-d31b3f065610d2e6eb24fc650a7b7970 id-910887062f66edca0e81319b93cea3e8">
+          <bounds x="12" y="168" width="160" height="50"/>
+          <sourceConnection xsi:type="archimate:Connection" id="id-622b20d5a3a4e10a1a7410697781d1c1" source="id-ae631f0defdaa3e75eae90ec80b43503" target="id-6d13aa7bca971f92017db3c5075a4ab9" archimateRelationship="id-de530bb89afc9b8c3ab0c4b247765541"/>
+        </child>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-6d13aa7bca971f92017db3c5075a4ab9" archimateElement="id-d7e015dd2af3cf49fb2c8cab009637a8" targetConnections="id-622b20d5a3a4e10a1a7410697781d1c1">
+        <bounds x="470" y="320" width="190" height="55"/>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-305552076ff989eabb14009b1a449868" archimateElement="id-5f24bda2b746955182e7f662b08725b2">
+        <bounds x="720" y="80" width="160" height="60"/>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-aaa2aa1b5a9d9d9599983ee9e1b34c7f" archimateElement="id-51c3399fb0737b872df25cf4111eba67">
+        <bounds x="720" y="180" width="160" height="60"/>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-c967841991531109bbcf916f088bf3a0" archimateElement="id-1c35326ad6309c12ec732e360ed8bdee">
+        <bounds x="720" y="280" width="160" height="60"/>
+      </child>
+    </element>
+    <element xsi:type="archimate:ArchimateDiagramModel" name="2. Dataflow — обогащение контекста диалога" id="id-7a090690d6e72ad665a3e5a53c1c0b06">
+      <documentation>Диаграмма потоков данных в процессе обогащения контекста диалога. Отображает динамику взаимодействия: Звонящий клиент инициирует звонок → ElevenLabs Agent идентифицирует звонящего по номеру телефона (CLI/ANI) → формирует REST-запрос к DreamFactory → DreamFactory запрашивает MySQL CRM и PostgreSQL → возвращает данные агенту → агент встраивает данные в Контекст диалога и формирует персонализированный ответ. Цель — показать движение данных на всём пути от звонка до ответа.</documentation>
+      <child xsi:type="archimate:DiagramObject" id="id-24302516fda557c297d205600e11fc23" archimateElement="id-459205d3a703dcd1fcb110a963bb182d">
+        <bounds x="20" y="160" width="130" height="55"/>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-27aedce7ca7654aff7ee087cf168e3de" archimateElement="id-fe608c11fb2f07ce70b37c32cb23b641" targetConnections="id-2cc38ae4d8c3a5c89787e8d53a066312">
+        <bounds x="216" y="168" width="160" height="60"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-8d315eef252c2a9a013c25db54226dfc" source="id-27aedce7ca7654aff7ee087cf168e3de" target="id-0333f50fe88d7bae30eed7652b1c45c3" archimateRelationship="id-801497f2dc1ffbb3e368c6662429665a"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-b35d1e4df25e406830a4611dd85c3710" source="id-27aedce7ca7654aff7ee087cf168e3de" target="id-87b30265db9f0f855e234ac5cd285688" archimateRelationship="id-13bbb8ca3c033088581caea989d59452"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-6efa2aa3759fbc1ff0ab5a643389cbd3" source="id-27aedce7ca7654aff7ee087cf168e3de" target="id-70c8c37c74eef7c5511bd6e49ac8e3e7" archimateRelationship="id-96e888bead8b2a2376ae5e75b3bbd808"/>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-0333f50fe88d7bae30eed7652b1c45c3" archimateElement="id-7295a6d6f92c526be12377f5bee7719d" targetConnections="id-8d315eef252c2a9a013c25db54226dfc">
+        <bounds x="576" y="48" width="160" height="55"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-bbd304b18cc7e4312ecc51075310b9e8" source="id-0333f50fe88d7bae30eed7652b1c45c3" target="id-1dd9e15d5af0be1566a40ab25153a9d9" archimateRelationship="id-01555e9cb87170386526d72af7883506"/>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-87b30265db9f0f855e234ac5cd285688" archimateElement="id-19486fb672de535d48a0e2c9dd21c6d1" targetConnections="id-b35d1e4df25e406830a4611dd85c3710 id-1f7046ee176ab132d850ffafa26868b3">
+        <bounds x="606" y="170" width="180" height="55"/>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-86c399868eab44025ec1699016724c6c" archimateElement="id-cd9b9b531f8f4806799d5bc794cbab46">
+        <bounds x="606" y="320" width="180" height="55"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-2cc38ae4d8c3a5c89787e8d53a066312" source="id-86c399868eab44025ec1699016724c6c" target="id-27aedce7ca7654aff7ee087cf168e3de" archimateRelationship="id-fd71e38688b17fd68b2d4fced7433e3c"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-1f7046ee176ab132d850ffafa26868b3" source="id-86c399868eab44025ec1699016724c6c" target="id-87b30265db9f0f855e234ac5cd285688" archimateRelationship="id-f4dbfe1b23ab2129bb28db1996e5a497"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-06f570563be829bdcc0b0570edf5c6ec" source="id-86c399868eab44025ec1699016724c6c" target="id-1dd9e15d5af0be1566a40ab25153a9d9" archimateRelationship="id-06d49b7236fe1d7fb70d70f5ad85cec0"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-43ad6f8dad9ba64ab3e3318e848940c6" source="id-86c399868eab44025ec1699016724c6c" target="id-112f94a93fdd04b71c65db7ceec1ca14" archimateRelationship="id-d48df230ce4e4eebe9c657cdf9147e94"/>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-7b08e9ebbf8ff1fb64fb77cbad934a96" archimateElement="id-5f24bda2b746955182e7f662b08725b2">
+        <bounds x="606" y="462" width="180" height="55"/>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-1dd9e15d5af0be1566a40ab25153a9d9" archimateElement="id-037e931b359454fd2c2781f97b33ee87" targetConnections="id-bbd304b18cc7e4312ecc51075310b9e8 id-06f570563be829bdcc0b0570edf5c6ec">
+        <bounds x="856" y="170" width="150" height="55"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-a69fcfccb2d6b317661736d228796615" source="id-1dd9e15d5af0be1566a40ab25153a9d9" target="id-112f94a93fdd04b71c65db7ceec1ca14" archimateRelationship="id-58805897df3aab2f6a46bb4f5d3071e6"/>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-112f94a93fdd04b71c65db7ceec1ca14" archimateElement="id-1aa8f575eed1541910df68b8a448545b" targetConnections="id-a69fcfccb2d6b317661736d228796615 id-43ad6f8dad9ba64ab3e3318e848940c6">
+        <bounds x="966" y="374" width="150" height="55"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-12d22519be3d8cf7d06877f8ca79bb2b" source="id-112f94a93fdd04b71c65db7ceec1ca14" target="id-70c8c37c74eef7c5511bd6e49ac8e3e7" archimateRelationship="id-638b7849c4dbd6f5bec7b266380c5e60"/>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-70c8c37c74eef7c5511bd6e49ac8e3e7" archimateElement="id-d40d0fea2f8b9a721f9ac816835ba15b" targetConnections="id-12d22519be3d8cf7d06877f8ca79bb2b id-6efa2aa3759fbc1ff0ab5a643389cbd3">
+        <bounds x="216" y="428" width="160" height="55"/>
+      </child>
+    </element>
+    <element xsi:type="archimate:ArchimateDiagramModel" name="3. Use Case — поиск заказов по номеру телефона" id="id-81af747f0a09d43ef351e271f459eb4e">
+      <documentation>Диаграмма конкретного сценария использования: клиент звонит, агент получает его номер телефона (CLI/ANI) и на лету запрашивает историю заказов из CRM. Шаги сценария: (1) входящий звонок — ElevenLabs принимает вызов и передаёт агенту номер телефона; (2) агент формирует запрос GET /api/v2/crm/customers?filter=phone={номер}; (3) DreamFactory выполняет SQL к MySQL CRM и возвращает профиль клиента; (4) агент запрашивает заказы по customer_id; (5) агент формирует ответ клиенту с деталями заказов. Ключевой элемент — номер телефона как идентификатор без явной самоидентификации клиента.</documentation>
+      <child xsi:type="archimate:DiagramObject" id="id-0be680558a29141bf582edcc77dc1e4e" archimateElement="id-459205d3a703dcd1fcb110a963bb182d">
+        <bounds x="235" y="0" width="130" height="55"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-a79021ab7bcb27b136b48c681e0689ce" source="id-0be680558a29141bf582edcc77dc1e4e" target="id-fe6c1ce04f2678ce1ede0c6da8d393ee" archimateRelationship="id-ac5c5bd070de925f75a8aeb9f6dba067"/>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-fe6c1ce04f2678ce1ede0c6da8d393ee" archimateElement="id-5e64ce4d0ee5b69f9b20856916738434" targetConnections="id-a79021ab7bcb27b136b48c681e0689ce id-45b2d74380fcdb1d93aea86c21afac32">
+        <bounds x="215" y="100" width="170" height="55"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-ffe462c92da2552edef1800041a98b74" source="id-fe6c1ce04f2678ce1ede0c6da8d393ee" target="id-482fba89c13b1eab3e51f860895bf8f1" archimateRelationship="id-dc4cf7dc9daf8794d09dbc624e7c9c7d"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-b5f955bf7967ec2c5f5b3c50d3834210" source="id-fe6c1ce04f2678ce1ede0c6da8d393ee" target="id-d6dce8d5adb68f34668442232a7c08c6" archimateRelationship="id-0923a84977097bd8a46c15ed18ac836e"/>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-482fba89c13b1eab3e51f860895bf8f1" archimateElement="id-13d30ce8d9ed219d0bf74e6c11ba813c" targetConnections="id-ffe462c92da2552edef1800041a98b74">
+        <bounds x="553" y="100" width="170" height="55"/>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-d6dce8d5adb68f34668442232a7c08c6" archimateElement="id-602d3de277b7a782c69bea997c9a7ac4" targetConnections="id-b5f955bf7967ec2c5f5b3c50d3834210 id-07e4aa435bf363115f40b3c88069bad0">
+        <bounds x="420" y="216" width="170" height="55"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-fbbba315679ec3aa4dcf95f2531fddb9" source="id-d6dce8d5adb68f34668442232a7c08c6" target="id-bc2338461ecf4ab0994818f5dd79a5bc" archimateRelationship="id-4b55281f8f4a5b77a83f94b21ae485a1"/>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-bc2338461ecf4ab0994818f5dd79a5bc" archimateElement="id-6b18be5ed49d0a5ea1e5e2bbcf84f0a0" targetConnections="id-fbbba315679ec3aa4dcf95f2531fddb9">
+        <bounds x="614" y="285" width="150" height="55"/>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-ced7d5e879cbd62b5d756151435a6e2e" archimateElement="id-fe608c11fb2f07ce70b37c32cb23b641" targetConnections="id-e3f76e03bf7fd6afb149e4da7efbe7c3">
+        <bounds x="232" y="384" width="170" height="60"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-45b2d74380fcdb1d93aea86c21afac32" source="id-ced7d5e879cbd62b5d756151435a6e2e" target="id-fe6c1ce04f2678ce1ede0c6da8d393ee" archimateRelationship="id-8e66cb38e1215e69cec8030f9e862623"/>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-1a934717ac889e82c45585e942acd5dd" archimateElement="id-d7e015dd2af3cf49fb2c8cab009637a8">
+        <bounds x="614" y="192" width="150" height="60"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-07e4aa435bf363115f40b3c88069bad0" source="id-1a934717ac889e82c45585e942acd5dd" target="id-d6dce8d5adb68f34668442232a7c08c6" archimateRelationship="id-ea542d4a863465397880e85057591d9a"/>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-1baf4e3c05109c4ba28f9c11fc59446e" archimateElement="id-cd9b9b531f8f4806799d5bc794cbab46">
+        <bounds x="816" y="396" width="170" height="60"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-e3f76e03bf7fd6afb149e4da7efbe7c3" source="id-1baf4e3c05109c4ba28f9c11fc59446e" target="id-ced7d5e879cbd62b5d756151435a6e2e" archimateRelationship="id-fd71e38688b17fd68b2d4fced7433e3c"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-e94db4d0adad511744d12e5a80fedad5" source="id-1baf4e3c05109c4ba28f9c11fc59446e" target="id-5c218bad680473fc8674c6ead5bb9b1b" archimateRelationship="id-06d49b7236fe1d7fb70d70f5ad85cec0"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-6a80b76e813d026c9ddecc77df161fc6" source="id-1baf4e3c05109c4ba28f9c11fc59446e" target="id-dbb230c30fd2b2fa0c4fa8d5301a52f3" archimateRelationship="id-d48df230ce4e4eebe9c657cdf9147e94"/>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-5c218bad680473fc8674c6ead5bb9b1b" archimateElement="id-037e931b359454fd2c2781f97b33ee87" targetConnections="id-e94db4d0adad511744d12e5a80fedad5">
+        <bounds x="1080" y="276" width="170" height="55"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-c38e457c950d9d9bdad628486577e9df" source="id-5c218bad680473fc8674c6ead5bb9b1b" target="id-dbb230c30fd2b2fa0c4fa8d5301a52f3" archimateRelationship="id-58805897df3aab2f6a46bb4f5d3071e6"/>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-dbb230c30fd2b2fa0c4fa8d5301a52f3" archimateElement="id-1aa8f575eed1541910df68b8a448545b" targetConnections="id-c38e457c950d9d9bdad628486577e9df id-6a80b76e813d026c9ddecc77df161fc6">
+        <bounds x="1080" y="558" width="170" height="55"/>
+      </child>
+    </element>
+    <element xsi:type="archimate:ArchimateDiagramModel" name="4. Развёртывание (Technology)" id="id-b6b228b4126634c2d32a774311ae7dee">
+      <documentation>Диаграмма физического развёртывания системы. Показывает два узла: Облако ElevenLabs (внешняя инфраструктура SaaS) и Сервер приложений (собственный Docker-хост). На сервере размещены контейнеры: Caddy (единственная точка входа, TLS), DreamFactory (REST API платформа), Redis (кэш и очереди). Отдельно показаны базы данных: MySQL CRM и PostgreSQL Сервисы, с которыми DreamFactory взаимодействует напрямую внутри Docker-сети common. ElevenLabs обращается к DreamFactory через интернет по HTTPS — единственный внешний трафик входит через Caddy.</documentation>
+      <child xsi:type="archimate:DiagramObject" id="id-307393be4ac80b57976cee2c26678e41" archimateElement="id-f7edcd320fd587c87ead3266dbe53f92">
+        <bounds x="96" y="432" width="160" height="80"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-4fee1b944fa2f71fc680cad191eb5c6f" source="id-307393be4ac80b57976cee2c26678e41" target="id-f06af293c5cf907ba85ecabc793f8a6c" archimateRelationship="id-c6c5f517adc1a369013e2ebe5607d239"/>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-f06af293c5cf907ba85ecabc793f8a6c" archimateElement="id-8fc94b623292a8a04b138cbe4bdd090e" targetConnections="id-4fee1b944fa2f71fc680cad191eb5c6f id-e103c49f9c23b339fe99684739695c83">
+        <bounds x="312" y="432" width="160" height="80"/>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-a9fd6065f4e4b732f536d22ba906fd94" archimateElement="id-d80085cae902f5e4853a66d42808fd55">
+        <bounds x="540" y="159" width="240" height="382"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-e103c49f9c23b339fe99684739695c83" source="id-a9fd6065f4e4b732f536d22ba906fd94" target="id-f06af293c5cf907ba85ecabc793f8a6c" archimateRelationship="id-56b668d265db74734d44dd6944ef0e26"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-e9b6019cb8b9c089853903f8c6d1ab89" source="id-a9fd6065f4e4b732f536d22ba906fd94" target="id-926f9cffdc96034ed607a6dd97be1636" archimateRelationship="id-a666270bfe99d059d6d6ab767d2578fd"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-5066165584d125ded084456b53866c06" source="id-a9fd6065f4e4b732f536d22ba906fd94" target="id-588c7b1e92be79a85f13abb09cda02c7" archimateRelationship="id-6be43e83af9d402bdb44843df003374c"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-1174ba0833449c534c91f7c89fbb8942" source="id-a9fd6065f4e4b732f536d22ba906fd94" target="id-0bd0c92c5aac3481a8ded759a7ec87f4" archimateRelationship="id-831618c4fb557af5e71bd305fda24430"/>
+        <child xsi:type="archimate:DiagramObject" id="id-926f9cffdc96034ed607a6dd97be1636" archimateElement="id-e8dcca192313b9175783bf1f66c102b1" targetConnections="id-e9b6019cb8b9c089853903f8c6d1ab89">
+          <bounds x="12" y="36" width="210" height="55"/>
+          <sourceConnection xsi:type="archimate:Connection" id="id-523f5385ba28cee7d3af5da1520a8248" source="id-926f9cffdc96034ed607a6dd97be1636" target="id-588c7b1e92be79a85f13abb09cda02c7" archimateRelationship="id-bf75713798bba0929e45da4cf858ad25"/>
+          <sourceConnection xsi:type="archimate:Connection" id="id-f9405304ecee2bbcbea592ff5f3f44f5" source="id-926f9cffdc96034ed607a6dd97be1636" target="id-14042c4cc978813bc0163196117160b5" archimateRelationship="id-9b920617034a05e451a070a1ec9c19aa"/>
+        </child>
+        <child xsi:type="archimate:DiagramObject" id="id-588c7b1e92be79a85f13abb09cda02c7" archimateElement="id-d0dc8a9a20a49df82cfca1faa11a1839" targetConnections="id-523f5385ba28cee7d3af5da1520a8248 id-5066165584d125ded084456b53866c06 id-9ea087305143818bb524da8c0740d429 id-6778497818314d026f65eab8b8a6cf55 id-1f16f147ca8816553a6e6f444bb95507">
+          <bounds x="12" y="168" width="210" height="55"/>
+          <sourceConnection xsi:type="archimate:Connection" id="id-0b44245610b91f943a3b94e1133cda59" source="id-588c7b1e92be79a85f13abb09cda02c7" target="id-14042c4cc978813bc0163196117160b5" archimateRelationship="id-20c833ce42a12388d2c018349d397650"/>
+        </child>
+        <child xsi:type="archimate:DiagramObject" id="id-0bd0c92c5aac3481a8ded759a7ec87f4" archimateElement="id-1c35326ad6309c12ec732e360ed8bdee" targetConnections="id-1174ba0833449c534c91f7c89fbb8942">
+          <bounds x="12" y="276" width="210" height="55"/>
+          <sourceConnection xsi:type="archimate:Connection" id="id-9ea087305143818bb524da8c0740d429" source="id-0bd0c92c5aac3481a8ded759a7ec87f4" target="id-588c7b1e92be79a85f13abb09cda02c7" archimateRelationship="id-3002ad8322ef6656cc143770f7d6fec2"/>
+          <sourceConnection xsi:type="archimate:Connection" id="id-a91783bf363b227204c41c8cfe45952d" source="id-0bd0c92c5aac3481a8ded759a7ec87f4" target="id-14042c4cc978813bc0163196117160b5" archimateRelationship="id-eb6612569572b26b677af693ae458492"/>
+        </child>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-f9f02893d69413ecf4ab5f25f5349d69" archimateElement="id-5f24bda2b746955182e7f662b08725b2">
+        <bounds x="972" y="168" width="160" height="60"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-6778497818314d026f65eab8b8a6cf55" source="id-f9f02893d69413ecf4ab5f25f5349d69" target="id-588c7b1e92be79a85f13abb09cda02c7" archimateRelationship="id-901a112d2bc236756c6dc96214baa6f9"/>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-5e4aad11f60683f6b79f4d2d8a0b8ed8" archimateElement="id-51c3399fb0737b872df25cf4111eba67">
+        <bounds x="984" y="360" width="160" height="60"/>
+        <sourceConnection xsi:type="archimate:Connection" id="id-1f16f147ca8816553a6e6f444bb95507" source="id-5e4aad11f60683f6b79f4d2d8a0b8ed8" target="id-588c7b1e92be79a85f13abb09cda02c7" archimateRelationship="id-8ebbbe0c5141eda4517857bf2cd1a00e"/>
+      </child>
+      <child xsi:type="archimate:DiagramObject" id="id-14042c4cc978813bc0163196117160b5" archimateElement="id-585209d607f44cf8a9d1eca029b58cf5" targetConnections="id-f9405304ecee2bbcbea592ff5f3f44f5 id-0b44245610b91f943a3b94e1133cda59 id-a91783bf363b227204c41c8cfe45952d">
+        <bounds x="276" y="168" width="210" height="55"/>
+      </child>
+    </element>
+  </folder>
+</archimate:model>
