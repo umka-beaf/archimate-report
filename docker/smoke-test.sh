@@ -81,15 +81,26 @@ check_report() {
         die "[$label] container never became reachable (30s+)"
     }
 
+    # Below, grep -q against a variable's content uses a herestring
+    # (`grep ... <<<"$x"`), never a pipe (`printf ... | grep -q ...`).
+    # grep -q exits the instant it finds a match, which - piped from a
+    # live writer - sends that writer SIGPIPE if it's still writing; under
+    # `set -o pipefail` (enabled above) that writer's non-zero exit status
+    # wins over grep's own success, failing the check even though the match
+    # was found. A herestring has no separate writer process racing grep,
+    # so it doesn't hit this. Found running this script for real for the
+    # first time (CLAUDE.md §26.3 flagged it as never having been run
+    # end-to-end) - it had been silently broken since it was written.
     local status_json body_bytes
     status_json=$(curl -fsS "http://127.0.0.1:$port/status") || die "[$label] /status did not respond"
-    printf '%s\n' "$status_json" | grep -q '"generating"' || die "[$label] /status response missing expected field: $status_json"
+    grep -q '"generating"' <<< "$status_json" || die "[$label] /status response missing expected field: $status_json"
     log "[$label] /status OK: $status_json"
 
     curl -fsS -o /dev/null "http://127.0.0.1:$port/" || die "[$label] report root did not respond HTTP 200"
-    body_bytes=$(curl -fsS "http://127.0.0.1:$port/" | wc -c)
+    body=$(curl -fsS "http://127.0.0.1:$port/")
+    body_bytes=${#body}
     [ "$body_bytes" -gt 0 ] || die "[$label] index.html served empty (see archi#980, CLAUDE.md §25)"
-    curl -fsS "http://127.0.0.1:$port/" | grep -qi "$expect" || die "[$label] report body missing expected title substring: $expect"
+    grep -qi "$expect" <<< "$body" || die "[$label] report body missing expected title substring: $expect"
     log "[$label] report OK: $body_bytes bytes, title contains '$expect'"
 }
 
@@ -120,12 +131,28 @@ WEBHOOK_RESP=$(curl -fsS -o /dev/null -w '%{http_code}' -X POST \
     "http://127.0.0.1:3102/webhook")
 [ "$WEBHOOK_RESP" = "202" ] || die "[coarchi] webhook trigger expected HTTP 202, got $WEBHOOK_RESP"
 log "[coarchi] webhook accepted (202), waiting for regeneration to finish"
-sleep 5
-curl -fsS "http://127.0.0.1:3102/status" | grep -q '"generating":false' || die "[coarchi] regeneration still running after 5s — check container logs"
+# Poll instead of a single fixed sleep+check - a flat "sleep 5" is a flaky
+# test under host load (observed one run take just over 5s here for a repo
+# that normally finishes in ~2s), and there's no reason to hard-fail just
+# because the box was briefly busy.
+WEBHOOK_DONE=0
+for _ in $(seq 1 20); do
+    STATUS_AFTER_WEBHOOK=$(curl -fsS "http://127.0.0.1:3102/status")
+    if grep -q '"generating":false' <<< "$STATUS_AFTER_WEBHOOK" && grep -q '"last_run_at":"20' <<< "$STATUS_AFTER_WEBHOOK"; then
+        WEBHOOK_DONE=1
+        break
+    fi
+    sleep 1
+done
+[ "$WEBHOOK_DONE" = "1" ] || die "[coarchi] regeneration still running after 20s — check container logs"
 log "[coarchi] webhook regeneration OK"
 
 # --- Test 2b: wrong webhook secret must be rejected ---
-WEBHOOK_REJECT=$(curl -fsS -o /dev/null -w '%{http_code}' -X POST \
+# No -f here (unlike the 202 check above): -f makes curl itself treat a 4xx
+# response as an error and exit non-zero before -w can report the code, which
+# under `set -e` aborts the whole script on the very rejection we're testing
+# for. Without -f, curl exits 0 for any HTTP status and just reports it.
+WEBHOOK_REJECT=$(curl -sS -o /dev/null -w '%{http_code}' -X POST \
     -H "X-Webhook-Secret: wrong-secret" \
     "http://127.0.0.1:3102/webhook")
 [ "$WEBHOOK_REJECT" = "401" ] || die "[coarchi] webhook with wrong secret expected HTTP 401, got $WEBHOOK_REJECT"

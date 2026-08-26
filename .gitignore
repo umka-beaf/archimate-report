@@ -20,5 +20,17 @@ spikes/archi-source-build-logs/
 /spikes/coarchi-glycam-report/
 /spikes/item3-properties-test/report/
 
+# spikes/test_report/ was a full Archi-generated report used as the working
+# area for the RU/EN + light/dark theme (CLAUDE.md §28) — only css/ and js/
+# are our actual source (now the canonical copy lives in
+# docker/report-theme/, see §28.4); the rest is Archi's own generated
+# output (per-element/per-view pages + vendored bootstrap/jquery-ui/etc.),
+# reproducible by re-running the report generator, not ours to track.
+/spikes/test_report/elements/
+/spikes/test_report/hints/
+/spikes/test_report/id-*/
+/spikes/test_report/index.html
+/spikes/test_report/lib/
+
 # Misc
 .DS_Store

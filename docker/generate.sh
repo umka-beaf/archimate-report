@@ -62,6 +62,7 @@ REPO_DIR="/data/repo"
 REPORT_DIR="/data/report"
 REPORT_TMP_DIR="/data/report.new"
 SECRETS_DIR="/data/secrets"
+REPORT_THEME_DIR="/opt/report-theme"
 
 case "$MODEL_FORMAT" in
     auto | plain | coarchi) ;;
@@ -271,6 +272,43 @@ fi
 
 [ -f "$REPORT_TMP_DIR/index.html" ] || die "generation finished but $REPORT_TMP_DIR/index.html is missing"
 [ -s "$REPORT_TMP_DIR/index.html" ] || die "generation finished but index.html is empty (see archi issue #980)"
+
+# Overlay our RU/EN + light/dark theme on top of Archi's stock report assets.
+# Every generated page (index.html, elements/*.html, views/*.html) only ever
+# references these same 4 static files (css/model.css, css/i18n.css,
+# js/model.js, js/frame.js) at fixed relative paths, so overwriting just them
+# re-themes/localizes the entire report without touching any of the hundreds
+# of per-element/per-view HTML pages Archi generates. Done after validation
+# (above) but before publish, so a missing/broken theme dir never publishes a
+# half-themed report - it's a hard failure, same severity as a missing
+# index.html. USE_MODERN_CSS (default true) lets a user opt back into Archi's
+# stock, unmodified report - e.g. if they don't trust/want the vendored
+# marked.js, or just prefer the original look.
+case "${USE_MODERN_CSS:-true}" in
+    true)
+        USE_MODERN_CSS=true
+        ;;
+    false)
+        log "USE_MODERN_CSS=false, serving Archi's stock (unthemed) report"
+        USE_MODERN_CSS=false
+        ;;
+    *) die "USE_MODERN_CSS must be true or false, got: ${USE_MODERN_CSS}" ;;
+esac
+
+if [ "$USE_MODERN_CSS" = "true" ]; then
+    if [ -d "$REPORT_THEME_DIR" ]; then
+        log "applying report theme from $REPORT_THEME_DIR"
+        cp -f "$REPORT_THEME_DIR/css/model.css" "$REPORT_TMP_DIR/css/model.css" || die "failed to apply report theme (css/model.css)"
+        cp -f "$REPORT_THEME_DIR/css/i18n.css" "$REPORT_TMP_DIR/css/i18n.css" || die "failed to apply report theme (css/i18n.css)"
+        mkdir -p "$REPORT_TMP_DIR/css/i18n"
+        cp -f "$REPORT_THEME_DIR/css/i18n/en.css" "$REPORT_TMP_DIR/css/i18n/en.css" || die "failed to apply report theme (css/i18n/en.css)"
+        cp -f "$REPORT_THEME_DIR/css/i18n/ru.css" "$REPORT_TMP_DIR/css/i18n/ru.css" || die "failed to apply report theme (css/i18n/ru.css)"
+        cp -f "$REPORT_THEME_DIR/js/model.js" "$REPORT_TMP_DIR/js/model.js" || die "failed to apply report theme (js/model.js)"
+        cp -f "$REPORT_THEME_DIR/js/frame.js" "$REPORT_TMP_DIR/js/frame.js" || die "failed to apply report theme (js/frame.js)"
+    else
+        log "WARNING: $REPORT_THEME_DIR not found, serving Archi's stock (unthemed) report"
+    fi
+fi
 
 # Publish by replacing REPORT_DIR's *contents*, not the directory itself.
 # We used to rename the whole directory (mv REPORT_DIR -> REPORT_DIR.old,

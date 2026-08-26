@@ -1,0 +1,490 @@
+/* Setup html pages */
+html {
+	height: 100%; /* Needed for 'empty-element.html' */
+}
+
+html.model > body {
+  background:#ddd;
+  padding: 0;
+}
+
+html.frame > body {
+  height: 100%;
+  background:#ddd;
+  /* padding: 15px; */
+}
+
+/* ModelTree */
+ul, li {
+  list-style-type: none;
+  cursor: default;
+}
+li.tree-element, ul{
+	padding-left: 15px;
+}
+
+/* jQuery UI Layout style */
+.ui-layout-pane {
+  padding: 0px;
+  overflow: hidden;
+  border: 0px solid #ddd;
+	background: #ddd;
+}
+.ui-layout-resizer {
+  border: 2px solid #ddd;
+}
+
+/* Force panels width/height */
+.root-panel {
+	height: 100%;
+  overflow: hidden;
+	background: #FFF;
+}
+.root-panel-body {
+  /* height will be set though jQuery */
+  overflow: auto;
+}
+.no-padding {
+	padding: 0px;
+}
+.no-margin {
+	margin: 0px;
+}
+.documentation {
+	padding-top: 15px;
+	padding-bottom: 15px;
+}
+.navbar {
+	height: 100%;
+}
+
+/* iFrames are inside panel-body */
+iframe {
+  margin: 0px;
+  padding: 0px;
+  border: none;
+  width: 100%;
+  height: 100%;
+}
+
+p.centered {
+	position: relative;
+	top: 50%;
+	transform: translateY(-50%);
+	text-align: center;
+}
+
+.table-condensed th,td {
+	font-size: 14px;
+}
+
+img.diagram {
+	max-width: 100%;
+}
+
+xmp {
+	font-family: "Helvetica Neue",Helvetica,Arial,sans-serif;
+}
+
+/* Alasql console */
+#myconsole td {
+    white-space: pre-wrap;
+}
+
+/* Changing Navbar color can be done by uncommenting and adapting what follows */
+/*
+.navbar {
+    background-color: #017a54;
+}
+
+.navbar .navbar-nav>li>a:hover {
+    background-color: rgb(255 255 255 / 20%);
+}
+
+.navbar .navbar-nav>li>a:focus {
+    background-color: rgb(255 255 255 / 0%);
+}
+*/
+
+/* Image Zoom Slider */
+.root-panel-heading {
+	position: relative;
+}
+
+#btnZoomIn, #btnZoomOut {
+	cursor: pointer;
+	padding: 0;
+}
+
+#zoomSlider {
+	width: 150px;
+    position: absolute;
+    top: 50% !important;
+    right: 0;
+    transform: translateY(-50%);
+}
+
+#zoomRange {
+	padding: 0;
+}
+
+/* Internet Explorer input range theming thanks to https://brennaobrien.com/blog/2014/05/style-input-type-range-in-every-browser.html */
+input[type=range]::-ms-track {
+    width: 300px;
+    height: 5px;
+    
+    /*remove bg colour from the track, we'll use ms-fill-lower and ms-fill-upper instead */
+    background: transparent;
+    
+    /*leave room for the larger thumb to overflow with a transparent border */
+    border-color: transparent;
+    border-width: 6px 0;
+
+    /*remove default tick marks*/
+    color: transparent;
+}
+input[type=range]::-ms-fill-lower {
+    background: #777;
+    border-radius: 10px;
+}
+input[type=range]::-ms-fill-upper {
+    background: #ddd;
+    border-radius: 10px;
+}
+input[type=range]::-ms-thumb {
+    border: none;
+    height: 16px;
+    width: 16px;
+    border-radius: 50%;
+    background: #767676;
+}
+input[type=range]:focus::-ms-fill-lower {
+    background: #888;
+}
+input[type=range]:focus::-ms-fill-upper {
+    background: #ccc;
+}
+
+
+/* Firefox input range theming thanks to https://brennaobrien.com/blog/2014/05/style-input-type-range-in-every-browser.html */
+input[type=range]{
+	background: transparent;
+}
+
+input[type=range]::-moz-range-track {
+    /*width: 300px;*/
+    height: 5px;
+    background: #ddd;
+    border: none;
+    border-radius: 3px;
+}
+
+input[type=range]::-moz-range-thumb {
+    border: none;
+    height: 16px;
+    width: 16px;
+    border-radius: 50%;
+    background: #767676;
+}
+
+
+/* Search Box */
+#tree-search {
+  width: 5px;
+  box-sizing: border-box;
+  border: transparent;
+  border-radius: 20px;
+  background-color: transparent;
+  background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAMAAABg3Am1AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAADNQTFRFU1NT9fX1lJSUXl5e1dXVfn5+c3Nz6urqv7+/tLS0iYmJqampn5+fysrK39/faWlp////Vi4ZywAAABF0Uk5T/////////////////////wAlrZliAAABLklEQVR42rSWWRbDIAhFHeOUtN3/ags1zaA4cHrKZ8JFRHwoXkwTvwGP1Qo0bYObAPwiLmbNAHBWFBZlD9j0JxflDViIObNHG/Do8PRHTJk0TezAhv7qloK0JJEBh+F8+U/hopIELOWfiZUCDOZD1RADOQKA75oq4cvVkcT+OdHnqqpQCITWAjnWVgGQUWz12lJuGwGoaWgBKzRVBcCypgUkOAoWgBX/L0CmxN40u6xwcIJ1cOzWYDffp3axsQOyvdkXiH9FKRFwPRHYZUaXMgPLeiW7QhbDRciyLXJaKheCuLbiVoqx1DVRyH26yb0hsuoOFEPsoz+BVE0MRlZNjGZcRQyHYkmMp2hBTIzdkzCTc/pLqOnBrk7/yZdAOq/q5NPBH1f7x7fGP4C3AAMAQrhzX9zhcGsAAAAASUVORK5CYII=);
+  background-size: 20px;
+  background-position: right 5px center; 
+  background-repeat: no-repeat;
+  padding: 5px 15px 5px 15px;
+  cursor: pointer;
+}
+
+#tree-search:focus {
+  width: 100%;
+  cursor: auto;
+  background-color: #FFF !important;
+  border: 1px solid #ddd;
+  border-radius: 2px;
+}
+
+#tree-search.filtered {
+  background-color: #ddd;
+}
+
+/* To remove cross symbol in input field  */
+#tree-search::-ms-clear {
+   display: none;
+}
+
+#searchBox {
+    position: absolute;
+    top: 50% !important;
+    right: 0;
+    transform: translateY(-50%);
+	padding-right: 5px;
+}
+
+/* ==========================================================================
+   docker/report-theme: modern design + light/dark theme + toggle controls
+   Injected by generate.sh, overwriting Archi's default css/model.css.
+   Everything below is additive on top of the plugin's stock rules above.
+   ========================================================================== */
+
+:root {
+	--arc-bg: #f3f4f7;
+	--arc-surface: #ffffff;
+	--arc-surface-alt: #f6f7f9;
+	--arc-border: #e3e5eb;
+	--arc-text: #1b1e24;
+	--arc-text-muted: #6b7280;
+	--arc-accent: #3b6fe0;
+	--arc-accent-contrast: #ffffff;
+	--arc-shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 4px 12px rgba(15, 23, 42, .05);
+	--arc-diagram-bg: #ffffff;
+	--arc-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+html.dark {
+	--arc-bg: #14161a;
+	--arc-surface: #1b1e24;
+	--arc-surface-alt: #21252c;
+	--arc-border: #2c313b;
+	--arc-text: #e7e9ec;
+	--arc-text-muted: #9aa1ac;
+	--arc-accent: #6c9bff;
+	--arc-accent-contrast: #0c0e11;
+	--arc-shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 4px 12px rgba(0, 0, 0, .35);
+	/* Raster diagrams are baked with an opaque white background (no real
+	   alpha) - CSS cannot remove it, so we keep them on a light "paper" card
+	   even in dark mode instead of fighting the image. */
+	--arc-diagram-bg: #f3f4f7;
+}
+
+html.model > body,
+html.frame > body {
+	background: var(--arc-bg);
+	color: var(--arc-text);
+	font-family: var(--arc-font);
+}
+
+.ui-layout-pane {
+	background: var(--arc-bg);
+	border-color: var(--arc-bg);
+}
+.ui-layout-resizer {
+	border-color: var(--arc-bg);
+}
+
+.root-panel {
+	background: var(--arc-surface);
+	box-shadow: var(--arc-shadow);
+	border-radius: 10px;
+}
+
+.root-panel-heading {
+	background: var(--arc-surface-alt);
+	border-bottom: 1px solid var(--arc-border);
+	color: var(--arc-text);
+	font-weight: 600;
+}
+
+/* Navbar */
+.navbar {
+	background: var(--arc-surface) !important;
+	border: none;
+	box-shadow: var(--arc-shadow);
+}
+.navbar-inverse .navbar-brand {
+	color: var(--arc-text) !important;
+	font-weight: 600;
+	letter-spacing: .2px;
+}
+.navbar-inverse .navbar-nav > li > a {
+	color: var(--arc-text-muted) !important;
+}
+.navbar-inverse .navbar-nav > li > a:hover,
+.navbar-inverse .navbar-nav > li > a:focus {
+	color: var(--arc-accent) !important;
+	background: transparent !important;
+}
+
+/* Model tree */
+.tree-folder > span {
+	display: inline-block;
+	cursor: pointer;
+	border-radius: 6px;
+	padding: 2px 6px;
+	color: var(--arc-text);
+}
+.tree-folder > span:hover {
+	background: var(--arc-surface-alt);
+}
+.tree-element > a {
+	display: block;
+	border-radius: 6px;
+	padding: 3px 8px;
+	color: var(--arc-text);
+	text-decoration: none;
+}
+.tree-element > a:hover {
+	background: var(--arc-surface-alt);
+	color: var(--arc-accent);
+}
+
+/* Tabs / tables inside element & view panels */
+.nav-tabs {
+	border-color: var(--arc-border);
+}
+.nav-tabs > li > a {
+	color: var(--arc-text-muted);
+}
+.nav-tabs > li.active > a,
+.nav-tabs > li.active > a:hover,
+.nav-tabs > li.active > a:focus {
+	color: var(--arc-text);
+	background: var(--arc-surface);
+	border-color: var(--arc-border) var(--arc-border) transparent;
+}
+.table {
+	color: var(--arc-text);
+}
+.table > thead > tr > th,
+.table > tbody > tr > td {
+	border-color: var(--arc-border) !important;
+}
+
+/* Modal dialogs (About / Hint) */
+.modal-content {
+	background: var(--arc-surface);
+	color: var(--arc-text);
+	border: 1px solid var(--arc-border);
+}
+.modal-header,
+.modal-footer {
+	border-color: var(--arc-border);
+}
+
+/* Diagram images: real transparency isn't available (Archi bakes an opaque
+   white background into the PNG), so we frame them as a light card instead
+   of forcing a dark background behind them. */
+img.diagram {
+	background: var(--arc-diagram-bg);
+	border-radius: 10px;
+	box-shadow: var(--arc-shadow);
+	padding: 12px;
+	box-sizing: border-box;
+}
+
+/* Search box (adjust to theme) */
+#tree-search:focus {
+	background-color: var(--arc-surface) !important;
+	color: var(--arc-text);
+	border-color: var(--arc-border);
+}
+
+/* Language / theme toggle controls, injected into the navbar by model.js */
+.arc-toggle-group {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin: 0 8px;
+}
+.arc-toggle-btn {
+	cursor: pointer;
+	border: 1px solid var(--arc-border);
+	background: var(--arc-surface);
+	color: var(--arc-text-muted);
+	border-radius: 6px;
+	padding: 4px 10px;
+	font-size: 12px;
+	line-height: 1.2;
+	user-select: none;
+}
+.arc-toggle-btn:hover {
+	color: var(--arc-accent);
+	border-color: var(--arc-accent);
+}
+.arc-toggle-btn.active {
+	background: var(--arc-accent);
+	color: var(--arc-accent-contrast);
+	border-color: var(--arc-accent);
+}
+
+/* Rendered Markdown (element/view/model Documentation & Purpose text),
+   see js/frame.js - marked.parse() output lands in a .markdown-body div. */
+.markdown-body {
+	line-height: 1.55;
+}
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+	margin: 1.1em 0 .4em;
+	font-weight: 600;
+	color: var(--arc-text);
+}
+.markdown-body h1:first-child,
+.markdown-body h2:first-child,
+.markdown-body h3:first-child {
+	margin-top: 0;
+}
+.markdown-body p {
+	margin: 0 0 .8em;
+}
+.markdown-body ul,
+.markdown-body ol {
+	margin: 0 0 .8em;
+	padding-left: 1.6em;
+}
+.markdown-body hr {
+	border: none;
+	border-top: 1px solid var(--arc-border);
+	margin: 1.2em 0;
+}
+.markdown-body a {
+	color: var(--arc-accent);
+}
+.markdown-body code {
+	background: var(--arc-surface-alt);
+	border-radius: 4px;
+	padding: 1px 5px;
+	font-size: .9em;
+}
+.markdown-body pre {
+	background: var(--arc-surface-alt);
+	border-radius: 8px;
+	padding: 10px 12px;
+	overflow: auto;
+}
+.markdown-body pre code {
+	background: none;
+	padding: 0;
+}
+.markdown-body blockquote {
+	margin: 0 0 .8em;
+	padding-left: 12px;
+	border-left: 3px solid var(--arc-border);
+	color: var(--arc-text-muted);
+}
+.markdown-body table {
+	border-collapse: collapse;
+	width: auto;
+	max-width: 100%;
+	margin: 0 0 1em;
+}
+.markdown-body th,
+.markdown-body td {
+	border: 1px solid var(--arc-border);
+	padding: 6px 10px;
+	text-align: left;
+}
+.markdown-body th {
+	background: var(--arc-surface-alt);
+	font-weight: 600;
+}

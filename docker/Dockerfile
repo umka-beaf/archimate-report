@@ -120,7 +120,7 @@ ARG TARGETARCH
 # (see CLAUDE.md M2 notes on the "Model was not loaded" investigation). It's
 # pure Java (no native code) so it's installed once here, arch-independently,
 # rather than duplicated in both archi-linux-amd64 and archi-linux-arm64.
-ARG COARCHI_VERSION=0.9.6
+ARG COARCHI_VERSION=0.9.7
 
 RUN set -eux; \
     apt-get update; \
@@ -164,6 +164,13 @@ COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY generate.sh /usr/local/bin/generate.sh
 COPY Caddyfile /etc/caddy/Caddyfile
 RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/generate.sh /usr/local/bin/archi-webhook
+
+# RU/EN + light/dark report theme, overlaid onto Archi's generated report by
+# generate.sh after each run (see REPORT_THEME_DIR there) - overwrites just
+# the 4 static asset files every generated page references, so the whole
+# report is themed/localized without templating the hundreds of per-element/
+# per-view pages Archi itself generates.
+COPY report-theme /opt/report-theme
 
 # /data/repo    — working copy of the git repository
 # /data/report  — generated HTML report, served by Caddy

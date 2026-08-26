@@ -55,6 +55,7 @@ docker run -d \
 | `PORT` | нет | порт раздачи, по умолчанию `3000` |
 | `REGENERATE_ON_START` | нет | `true` (по умолчанию) / `false` |
 | `GENERATION_TIMEOUT` | нет | таймаут одного прогона генерации, сек (по умолчанию `600`) |
+| `USE_MODERN_CSS` | нет | `true` (по умолчанию) / `false` — RU/EN + light/dark тема отчёта поверх штатного Archi-вида; `false` отдаёт немодифицированный отчёт Archi |
 | `TZ` | нет | таймзона контейнера |
 
 `*` — ровно один способ авторизации git (или ни одного — для публичных
@@ -149,6 +150,7 @@ The report is available at `http://localhost:3000` a few seconds after start
 | `PORT` | no | serving port, defaults to `3000` |
 | `REGENERATE_ON_START` | no | `true` (default) / `false` |
 | `GENERATION_TIMEOUT` | no | timeout for a single generation run, seconds (default `600`) |
+| `USE_MODERN_CSS` | no | `true` (default) / `false` — RU/EN + light/dark report theme layered on Archi's stock look; `false` serves Archi's unmodified report |
 | `TZ` | no | container timezone |
 
 `*` — exactly one git auth method (or none, for public repositories).
