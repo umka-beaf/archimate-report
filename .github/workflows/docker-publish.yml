@@ -1,0 +1,79 @@
+name: Build and publish Docker image
+
+# Intentionally NOT triggered on every push — Archi releases are infrequent
+# and a full multi-arch build includes a from-source Tycho/Maven build of
+# Archi for linux/arm64 (see docker/patches/ + README "Architectures"), which
+# takes several minutes. Publishing is a deliberate, manual act, same as the
+# `docker buildx build --push` workflow the maintainer already runs locally.
+on:
+  workflow_dispatch:
+    inputs:
+      archi_version:
+        description: >
+          Archi version to build (e.g. 5.9.0). Leave empty to resolve the
+          latest release at build time, same as the local build.
+        required: false
+        type: string
+      push:
+        description: Push the built image to Docker Hub
+        required: false
+        type: boolean
+        default: true
+  release:
+    types: [published]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Resolve version tag and build args
+        id: version
+        run: |
+          VERSION="${{ github.event.inputs.archi_version }}"
+          if [ -z "$VERSION" ] && [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+            VERSION="${VERSION#v}"
+          fi
+
+          TAGS="umkabeaf/archimate-report:latest"
+          BUILD_ARGS=""
+          if [ -n "$VERSION" ]; then
+            TAGS="$TAGS
+          umkabeaf/archimate-report:$VERSION"
+            BUILD_ARGS="ARCHI_VERSION=$VERSION"
+          fi
+
+          {
+            echo "tags<<EOF"
+            echo "$TAGS"
+            echo "EOF"
+            echo "build_args<<EOF"
+            echo "$BUILD_ARGS"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event.inputs.push != 'false' }}
+          build-args: ${{ steps.version.outputs.build_args }}
+          tags: ${{ steps.version.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
