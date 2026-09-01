@@ -4,7 +4,8 @@
 
 ---
 
-## Русский
+<a id="русский"></a>
+## 🇷🇺 Русский
 
 Отдельный Go-бинарник (`docker/webhook/main.go`, только stdlib, без внешних
 зависимостей), собираемый в свою стадию образа (`webhook-builder`) и
@@ -86,7 +87,8 @@ GitHub/GitLab — см. [README](../README.md#вебхук).
 
 ---
 
-## English
+<a id="english"></a>
+## 🇬🇧 English
 
 A standalone Go binary (`docker/webhook/main.go`, stdlib only, no external
 dependencies), built in its own image stage (`webhook-builder`) and run in

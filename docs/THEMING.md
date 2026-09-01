@@ -4,7 +4,8 @@
 
 ---
 
-## Русский
+<a id="русский"></a>
+## 🇷🇺 Русский
 
 Штатный HTML-отчёт Archi функционален, но прост: один фиксированный
 английский интерфейс, одна фиксированная светлая тема, а документация
@@ -79,7 +80,8 @@ js/frame.js
 
 ---
 
-## English
+<a id="english"></a>
+## 🇬🇧 English
 
 Archi's HTML report is functional but plain: one fixed English UI, one fixed
 light theme, and element/view documentation rendered as raw text even when

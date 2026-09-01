@@ -28,7 +28,7 @@
 ---
 
 <a id="russian"></a>
-## Русский
+## 🇷🇺 Русский
 
 Docker-образ, который клонирует git-репозиторий с ArchiMate-моделью
 (одиночный `*.archimate` **или** [coArchi](https://www.archimatetool.com/plugins/)-репозиторий,
@@ -63,9 +63,14 @@ RU+EN):
   coArchi-репозиторий (git-native формат модели, по файлу на элемент) — не
   нужно ничего настраивать вручную в типичном случае.
 - **RU/EN + light/dark тема отчёта из коробки** (`USE_MODERN_CSS`, включена
-  по умолчанию) — переключатель языка/темы прямо в отчёте, рендеринг
-  Markdown в документации элементов, более удобные пропорции панелей.
-  Хотите оригинальный вид Archi — один флаг всё выключает.
+  по умолчанию) — переключатель языка/темы прямо в отчёте, более удобные
+  пропорции панелей. Хотите оригинальный вид Archi — один флаг всё выключает.
+- **📝 Документация элементов рендерится как Markdown, а не сырой текст.**
+  Штатный отчёт Archi просто печатает содержимое поля Documentation
+  как есть — даже если вы там писали списки/таблицы/код. Здесь оно проходит
+  через полноценный Markdown-рендер прямо в браузере, так что документация
+  модели наконец выглядит как документация, а не как простыня текста.
+  Подробности — [docs/THEMING.md](docs/THEMING.md).
 - **Вебхук с дебаунсом.** `github`/`gitlab`/`generic`-подписи, однослотовая
   очередь — параллельные пуши не порождают гонку между генерациями.
 - **Атомарная публикация.** Отчёт никогда не отдаётся наполовину
@@ -323,7 +328,7 @@ docker buildx build \
 ---
 
 <a id="english"></a>
-## English
+## 🇬🇧 English
 
 A Docker image that clones a git repository containing an ArchiMate model
 (a single `*.archimate` file **or** a [coArchi](https://www.archimatetool.com/plugins/)
@@ -358,9 +363,14 @@ Deeper topics live in their own docs (all bilingual, RU+EN):
   repository (the git-native model format, one file per element) — no manual
   configuration needed in the common case.
 - **RU/EN + light/dark report theme out of the box** (`USE_MODERN_CSS`, on by
-  default) — language/theme toggle right in the report, Markdown rendering
-  for element documentation, better panel proportions. Prefer stock Archi
-  styling? One flag turns it all off.
+  default) — language/theme toggle right in the report, better panel
+  proportions. Prefer stock Archi styling? One flag turns it all off.
+- **📝 Element documentation renders as Markdown, not raw text.** Archi's
+  stock report just prints the Documentation field's contents as-is — even
+  if you wrote lists/tables/code in there. Here it goes through a real
+  Markdown renderer right in the browser, so your model's documentation
+  finally looks like documentation instead of a wall of text. Details in
+  [docs/THEMING.md](docs/THEMING.md).
 - **Debounced webhook.** `github`/`gitlab`/`generic` signature schemes, a
   single-slot queue — concurrent pushes never race two generations against
   each other.

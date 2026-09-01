@@ -4,7 +4,8 @@
 
 ---
 
-## Русский
+<a id="русский"></a>
+## 🇷🇺 Русский
 
 У archimate-report один-единственный публично видимый процесс —
 [Caddy](https://caddyserver.com/), слушающий `$PORT` (по умолчанию `3000`).
@@ -73,7 +74,8 @@ in-memory кеша, который нужно было бы инвалидиро
 
 ---
 
-## English
+<a id="english"></a>
+## 🇬🇧 English
 
 archimate-report has a single public-facing process: [Caddy](https://caddyserver.com/),
 listening on `$PORT` (default `3000`). Everything else in the container —

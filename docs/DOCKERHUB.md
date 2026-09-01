@@ -10,12 +10,18 @@ HTML-отчёт через Archi CLI и раздаёт его статикой. 
 
 🥧 **Killer-фича: Archi наконец-то запускается на Raspberry Pi** — официальной
 Linux ARM64-сборки не существует, мы собираем её нативно из исходников.
+📝 Плюс RU/EN + light/dark тема отчёта с рендерингом документации элементов
+как Markdown, а не сырого текста (`USE_MODERN_CSS`).
+
 🥧 **Killer feature: Archi finally runs on a Raspberry Pi** — no official
 Linux ARM64 build exists, so we build one natively from source.
+📝 Plus an RU/EN + light/dark report theme that renders element documentation
+as Markdown instead of raw text (`USE_MODERN_CSS`).
 
 ---
 
-## Русский
+<a id="русский"></a>
+## 🇷🇺 Русский
 
 ### Что делает
 
@@ -111,7 +117,8 @@ list (amd64 + arm64) — не расходятся между собой.
 
 ---
 
-## English
+<a id="english"></a>
+## 🇬🇧 English
 
 ### What it does
 
