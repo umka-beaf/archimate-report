@@ -1,0 +1,34 @@
+{
+	admin off
+	auto_https off
+
+	# No `output file ...` here on purpose — logs go to stdout, which
+	# `docker logs` captures directly. Nothing is ever written to disk,
+	# so there is no log file to grow/rotate.
+	log {
+		output stdout
+		format console
+	}
+}
+
+:{$PORT} {
+	# archi-webhook listens on 127.0.0.1:8088 only — it is never exposed
+	# directly, only reachable through this reverse proxy. /status is always
+	# routed there (even if WEBHOOK_SECRET is unset, in which case the
+	# listener just answers 404 for the webhook path itself).
+	handle {$WEBHOOK_PATH:/webhook}* {
+		reverse_proxy 127.0.0.1:8088
+	}
+	handle /status {
+		reverse_proxy 127.0.0.1:8088
+	}
+	handle {
+		root * /data/report
+		file_server
+	}
+	encode gzip
+
+	# No access-log directive here either — kept off to avoid disk growth.
+	# If per-request logging is wanted later, add `log { output stdout }`
+	# inside this block (still stdout-only, never a file).
+}

@@ -1,0 +1,16 @@
+# Downloaded third-party Archi distribution (~300MB), reproducible via
+# https://github.com/archimatetool/archi.io/releases — not our content.
+/Archi/
+
+# Local spikes/experiments — never pushed to any remote (private history
+# already carries some of it from before this decision; going forward the
+# whole directory is untracked and stays local-only).
+/spikes/
+
+# Internal working notes/decision log — never meant for any remote either,
+# public or private. Kept as a local-only file (see docs/ for what actually
+# ships in git).
+/CLAUDE.md
+
+# Misc
+.DS_Store
