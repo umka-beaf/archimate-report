@@ -107,6 +107,10 @@ docker run -d \
 Оба тега для одной публикации указывают на один и тот же multi-arch manifest
 list (amd64 + arm64) — не расходятся между собой.
 
+Этот же образ зеркалируется на GitHub Container Registry —
+[`ghcr.io/umka-beaf/archimate-report`](https://github.com/umka-beaf/archimate-report/pkgs/container/archimate-report),
+тегами, синхронными с этой страницей.
+
 ### Архитектуры
 
 - `linux/amd64` — официальная сборка Archi (`Archi-Linux64-*.tgz`).
@@ -203,6 +207,10 @@ docker run -d \
 
 Both tags from a given release point at the same multi-arch manifest list
 (amd64 + arm64) — they never drift apart.
+
+This image is also mirrored to GitHub Container Registry —
+[`ghcr.io/umka-beaf/archimate-report`](https://github.com/umka-beaf/archimate-report/pkgs/container/archimate-report),
+tags kept in sync with this page.
 
 ### Architectures
 
