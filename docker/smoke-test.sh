@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Release smoke test — run this before every `docker buildx build --push`
-# release (see CLAUDE.md §16 for why there's no CI: releases are manual,
-# triggered by a new Archi version, not by every git push).
+# release (releases are manual, triggered by a new Archi version, not by
+# every git push — see the README's "Building and publishing the image" section).
 #
 # Builds the image for the *host* platform only (buildx --load can't load a
 # multi-arch manifest list — that's fine, this script exists to catch
@@ -11,7 +11,7 @@
 # hardware, so this script doesn't need to re-run that part every time).
 #
 # What it checks, against two known public test repos (same ones used
-# throughout M1-M5, see CLAUDE.md §17-§21):
+# throughout the project's testing):
 #   1. plain-format repo + explicit MODEL_PATH  -> HTTP 200, non-empty report
 #   2. coArchi-format repo, auto-detected       -> HTTP 200, non-empty report
 #   3. /status endpoint responds with valid JSON on both
@@ -89,8 +89,7 @@ check_report() {
     # wins over grep's own success, failing the check even though the match
     # was found. A herestring has no separate writer process racing grep,
     # so it doesn't hit this. Found running this script for real for the
-    # first time (CLAUDE.md §26.3 flagged it as never having been run
-    # end-to-end) - it had been silently broken since it was written.
+    # first time — it had been silently broken since it was written until then.
     local status_json body_bytes
     status_json=$(curl -fsS "http://127.0.0.1:$port/status") || die "[$label] /status did not respond"
     grep -q '"generating"' <<< "$status_json" || die "[$label] /status response missing expected field: $status_json"
@@ -99,7 +98,7 @@ check_report() {
     curl -fsS -o /dev/null "http://127.0.0.1:$port/" || die "[$label] report root did not respond HTTP 200"
     body=$(curl -fsS "http://127.0.0.1:$port/")
     body_bytes=${#body}
-    [ "$body_bytes" -gt 0 ] || die "[$label] index.html served empty (see archi#980, CLAUDE.md §25)"
+    [ "$body_bytes" -gt 0 ] || die "[$label] index.html served empty (see archi#980: https://github.com/archimatetool/archi/issues/980)"
     grep -qi "$expect" <<< "$body" || die "[$label] report body missing expected title substring: $expect"
     log "[$label] report OK: $body_bytes bytes, title contains '$expect'"
 }

@@ -1,5 +1,80 @@
 ## Caddy setup
 
+🇷🇺 [Русский](#русский) · 🇬🇧 [English](#english)
+
+---
+
+## Русский
+
+У archimate-report один-единственный публично видимый процесс —
+[Caddy](https://caddyserver.com/), слушающий `$PORT` (по умолчанию `3000`).
+Всё остальное внутри контейнера — генерация отчёта, вебхук-listener —
+внутреннее.
+
+### Что делает Caddy
+
+`docker/Caddyfile` (вшит в образ, не редактируется в рантайме):
+
+```caddyfile
+:{$PORT} {
+	handle {$WEBHOOK_PATH:/webhook}* {
+		reverse_proxy 127.0.0.1:8088
+	}
+	handle /status {
+		reverse_proxy 127.0.0.1:8088
+	}
+	handle {
+		root * /data/report
+		file_server
+	}
+	encode gzip
+}
+```
+
+- `handle {$WEBHOOK_PATH:/webhook}*` и `handle /status` проксируют на Go-вебхук
+  listener (`archi-webhook`, подробнее — [docs/WEBHOOK.md](WEBHOOK.md)),
+  который слушает **только** `127.0.0.1:8088` — напрямую он никогда не
+  доступен, только через этот прокси. Если `WEBHOOK_SECRET` не задан, сам
+  listener отдаёт 404 на путь вебхука (см. [README](../README.md#вебхук)) —
+  конфиг Caddy в обоих случаях один и тот же.
+- Всё остальное падает на `file_server` для `/data/report` — директории,
+  в которую [generate.sh](../docker/generate.sh) атомарно публикует отчёт.
+- `encode gzip` сжимает статику на выходе — отчёт генерируется заново каждый
+  раз, никаких сохранённых сжатых версий на диске нет.
+
+### Чего Caddy сознательно не делает
+
+- **Нет TLS-терминации.** `auto_https off`, обычный HTTP на `$PORT`. Образ
+  рассчитан на то, что перед ним стоит собственный reverse-proxy (другой
+  Caddy, Traefik, nginx, облачный балансировщик), если нужен HTTPS — см.
+  пример `docker-compose.yml` в [README](../README.md#docker-compose)
+  (только в русской секции, дублировать пример в английской не стали) —
+  он как раз рассчитан на такую схему (внешняя сеть `common`, без
+  опубликованных `ports:`).
+- **Нет лог-файлов.** `log { output stdout; format console }` на глобальном
+  уровне и никакой `log`-директивы внутри блока сайта — всё уходит в
+  `docker logs`, ничего не пишется на диск в `/data` или куда-либо ещё. Нет
+  лог-файла, который нужно ротировать или который мог бы неограниченно расти.
+- **Нет admin API.** `admin off` — конфиг статичен на весь жизненный цикл
+  контейнера, нет поверхности для рантайм-реконфигурации, которую нужно было
+  бы защищать.
+
+### Почему атомарная публикация тут важна
+
+`file_server` читает `/data/report` прямо с диска на каждый запрос — никакого
+in-memory кеша, который нужно было бы инвалидировать. Если бы регенерация
+(по вебхуку или иначе) подменяла файлы на месте, пока Caddy их отдаёт, запрос
+мог бы поймать наполовину записанный отчёт. `generate.sh` избегает этого,
+генерируя во временную директорию, валидируя её (непустой `index.html` — см.
+[archi#980](https://github.com/archimatetool/archi/issues/980)), и только
+затем подменяя содержимое `/data/report` — см. раздел «Тома» в
+[README](../README.md#тома) про безопасный для точек монтирования вариант
+этой подмены.
+
+---
+
+## English
+
 archimate-report has a single public-facing process: [Caddy](https://caddyserver.com/),
 listening on `$PORT` (default `3000`). Everything else in the container —
 report generation, the webhook listener — is internal.
@@ -25,11 +100,12 @@ report generation, the webhook listener — is internal.
 ```
 
 - `handle {$WEBHOOK_PATH:/webhook}*` and `handle /status` proxy to the Go
-  webhook listener (`archi-webhook`), which binds **only** to
-  `127.0.0.1:8088` — it's never reachable directly, only through this proxy.
-  If `WEBHOOK_SECRET` isn't set, the listener itself answers 404 on the
-  webhook path (see [README](../README.md#webhook)) — Caddy's config doesn't
-  change either way.
+  webhook listener (`archi-webhook`, see [docs/WEBHOOK.md](WEBHOOK.md) for
+  details), which binds **only** to `127.0.0.1:8088` — it's never reachable
+  directly, only through this proxy. If `WEBHOOK_SECRET` isn't set, the
+  listener itself answers 404 on the webhook path (see
+  [README](../README.md#webhook)) — Caddy's config doesn't change either
+  way.
 - Everything else falls through to `file_server` on `/data/report` — the
   report [generate.sh](../docker/generate.sh) atomically publishes into.
 - `encode gzip` compresses the static HTML/CSS/JS on the way out — the report

@@ -28,12 +28,18 @@ Docker-образ, который клонирует git-репозиторий 
 и раздаёт его статикой через [Caddy](https://caddyserver.com/). По вебхуку от
 GitHub/GitLab/чего угодно — перегенерирует отчёт при пуше в репозиторий модели.
 
-Этот README покрывает основной контракт (env-переменные, вебхук, тома,
-compose). Более глубокие темы вынесены в отдельные доки: 🐳 [docs/CADDY.md](docs/CADDY.md)
-— как устроен единственный публичный процесс (раздача отчёта + reverse proxy
-на вебхук, TLS-терминация снаружи, почему публикация атомарна); 🎨 [docs/THEMING.md](docs/THEMING.md)
-— как устроена RU/EN + light/dark тема отчёта (`USE_MODERN_CSS`) и как её
-кастомизировать.
+Этот README — общая точка входа в проект: он покрывает основной контракт
+(env-переменные, вебхук, тома, compose) и даёт достаточно, чтобы запустить
+сервис. Более глубокие темы вынесены в отдельные доки (все — двуязычные,
+RU+EN):
+
+| Документ | О чём |
+|---|---|
+| 🐳 [docs/CADDY.md](docs/CADDY.md) | Единственный публичный процесс: раздача отчёта + reverse proxy на вебхук, TLS-терминация снаружи, почему публикация атомарна |
+| 🎨 [docs/THEMING.md](docs/THEMING.md) | RU/EN + light/dark тема отчёта (`USE_MODERN_CSS`): как устроена, как кастомизировать |
+| 🪝 [docs/WEBHOOK.md](docs/WEBHOOK.md) | Go-listener `archi-webhook`: три схемы проверки подписи, однослотовый дебаунс, формат `/status` |
+| 🧩 [docs/PATCHES.md](docs/PATCHES.md) | Аддитивный патч для нативной arm64-сборки Archi из исходников — зачем он и как встроен в `docker/Dockerfile` |
+| 🐋 [docs/DOCKERHUB.md](docs/DOCKERHUB.md) | Короткая версия этого README для страницы образа на Docker Hub |
 
 ### ✨ Почему это может быть полезно
 
@@ -315,12 +321,17 @@ to generate an HTML report, and serves it as static files via
 [Caddy](https://caddyserver.com/). Accepts a webhook from GitHub/GitLab/anything
 generic to regenerate the report on push.
 
-This README covers the core contract (env vars, webhook, volumes, compose).
-Deeper topics live in their own docs: 🐳 [docs/CADDY.md](docs/CADDY.md) — how
-the single public-facing process is set up (serving the report + reverse
-proxy to the webhook, TLS termination left to you, why publishing is atomic);
-🎨 [docs/THEMING.md](docs/THEMING.md) — how the RU/EN + light/dark report
-theme (`USE_MODERN_CSS`) works and how to customize it.
+This README is the project's common entry point: it covers the core contract
+(env vars, webhook, volumes, compose) and gets you to a running service.
+Deeper topics live in their own docs (all bilingual, RU+EN):
+
+| Doc | What's in it |
+|---|---|
+| 🐳 [docs/CADDY.md](docs/CADDY.md) | The single public-facing process: serving the report + reverse proxy to the webhook, TLS termination left to you, why publishing is atomic |
+| 🎨 [docs/THEMING.md](docs/THEMING.md) | The RU/EN + light/dark report theme (`USE_MODERN_CSS`): how it works, how to customize it |
+| 🪝 [docs/WEBHOOK.md](docs/WEBHOOK.md) | The `archi-webhook` Go listener: the three signature-verification schemes, the single-slot debounce, the `/status` shape |
+| 🧩 [docs/PATCHES.md](docs/PATCHES.md) | The additive patch behind the native arm64 Archi source build — why it exists and how it's wired into `docker/Dockerfile` |
+| 🐋 [docs/DOCKERHUB.md](docs/DOCKERHUB.md) | The short version of this README, used for the Docker Hub image page |
 
 ### ✨ Why this might be useful
 

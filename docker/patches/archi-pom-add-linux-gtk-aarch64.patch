@@ -2,13 +2,15 @@ Additive patch for archimatetool/archi's top-level pom.xml (Tycho
 target-platform-configuration): adds a 5th <environment> for
 linux/gtk/aarch64 alongside the existing 4 (win32/x86_64, linux/gtk/x86_64,
 macosx/cocoa/x86_64, macosx/cocoa/aarch64) — does not remove or reorder any
-of the originals. See CLAUDE.md §5, §15.10, §16 for background: the Eclipse
-p2 repo already ships SWT fragments for this target, upstream just never
-requests it via this list.
+of the originals. The Eclipse p2 repo already ships SWT fragments for this
+target, upstream just never requests it via this list.
 
 Apply from the root of an `archimatetool/archi` checkout (matching
 ARCHI_VERSION's `release_<version>` tag), e.g.:
   patch -p1 < archi-pom-add-linux-gtk-aarch64.patch
+
+See ../../docs/PATCHES.md for the full story (why this exists, why it's
+additive, how it's used inside docker/Dockerfile).
 
 --- a/pom.xml
 +++ b/pom.xml

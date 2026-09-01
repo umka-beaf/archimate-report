@@ -1,9 +1,8 @@
-# M4 — native arm64 build (Tycho/Maven from source) alongside the amd64
-# official-tgz path, on top of M1/M2/M3 (clone + format auto-detection +
-# Archi CLI report generation + webhook + Caddy). See CLAUDE.md for the full
-# milestone history — §5/§15.9-§15.10 explain why arm64 is a native Tycho
-# build and not box64 emulation (open upstream box64 bug at the JVM/SWT/GTK3
-# boundary), §16 records the integration decisions this stage layout follows.
+# Native arm64 build (Tycho/Maven from source) alongside the amd64
+# official-tgz path — clone + format auto-detection + Archi CLI report
+# generation + webhook + Caddy. See docs/PATCHES.md for why arm64 is a
+# native Tycho build and not box64 emulation (open upstream box64 bug at the
+# JVM/SWT/GTK3 boundary) and how this stage layout works.
 
 # Shared across archi-linux-amd64 and archi-linux-arm64 so both branches of a
 # single `docker buildx build --platform linux/amd64,linux/arm64` build the
@@ -58,12 +57,11 @@ ARG ARCHI_VERSION
 COPY patches/archi-pom-add-linux-gtk-aarch64.patch /tmp/archi-pom-add-linux-gtk-aarch64.patch
 
 # Build-speed trim, deliberately NOT part of the committed patch (see
-# CLAUDE.md §16 decision #5 — the patch itself stays additive/portable).
-# This container build only ever needs the linux.gtk.aarch64 product, so
-# comment out the other 4 <environment> blocks just for this stage —
-# matches the ~3.5min single-target build already validated in
-# spikes/archi-source (CLAUDE.md §15.10), instead of a full 4-platform
-# Tycho reactor on every `docker buildx build`. Done via a perl one-liner
+# docs/PATCHES.md — the patch itself stays additive/portable). This
+# container build only ever needs the linux.gtk.aarch64 product, so comment
+# out the other 4 <environment> blocks just for this stage — a single-target
+# build takes minutes, a full 4-platform Tycho reactor would take much
+# longer on every `docker buildx build`. Done via a perl one-liner
 # (not a python heredoc) because Dockerfile's `\`-continued RUN syntax
 # doesn't mix with heredocs, and inline `#` comments aren't valid mid-RUN.
 RUN set -eux; \
@@ -117,8 +115,9 @@ ARG TARGETARCH
 # archimatetool.com, with no "latest" API to query. Pin and bump manually;
 # check https://www.archimatetool.com/plugins/ for the current release.
 # Without it, --modelrepository.loadModel silently fails to load any model
-# (see CLAUDE.md M2 notes on the "Model was not loaded" investigation). It's
-# pure Java (no native code) so it's installed once here, arch-independently,
+# (fails with "Model was not loaded", easy to mistake for a bad model path
+# rather than a missing plugin). It's pure Java (no native code) so it's
+# installed once here, arch-independently,
 # rather than duplicated in both archi-linux-amd64 and archi-linux-arm64.
 ARG COARCHI_VERSION=0.9.7
 
@@ -129,10 +128,10 @@ RUN set -eux; \
         xvfb xauth dbus dbus-x11 \
         libgtk-3-0 libxext6 libxrender1 libxi6 libxtst6 \
         libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libglib2.0-0; \
-    # The amd64 Archi-Linux64 tgz bundles its own JRE (confirmed in M1 — the
-    # container runs without installing Java separately). The arm64 Tycho
-    # product does not bundle one (confirmed on a Raspberry Pi 5 in
-    # CLAUDE.md §15.10) — install a native arm64 JRE only on that arch.
+    # The amd64 Archi-Linux64 tgz bundles its own JRE (the container runs
+    # without installing Java separately). The arm64 Tycho product does not
+    # bundle one (confirmed on a Raspberry Pi 5) — install a native arm64
+    # JRE only on that arch.
     if [ "$TARGETARCH" = "arm64" ]; then \
         apt-get install -y --no-install-recommends openjdk-21-jre-headless; \
     fi; \
