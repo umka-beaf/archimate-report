@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# M2 scope: plain + coArchi auto-detection, all three auth methods
-# (token / SSH key / username+password), MODEL_FORMAT override.
+# Clones/updates the model's git repo, auto-detects plain vs coArchi format,
+# runs the Archi CLI to generate the HTML report, overlays the RU/EN +
+# light/dark theme and favicon (docker/report-theme/), then publishes the
+# result to /data/report. Invoked by entrypoint.sh on container start and by
+# archi-webhook on every accepted webhook request.
 set -euo pipefail
 
 # Same timestamp format as entrypoint.sh and archi-webhook — see the comment
@@ -250,7 +253,7 @@ else
     esac
 fi
 
-# --- Generate into a scratch dir, then atomically swap into place ---
+# --- Generate into a scratch dir; published to REPORT_DIR further down ---
 rm -rf "$REPORT_TMP_DIR"
 mkdir -p "$REPORT_TMP_DIR"
 
@@ -272,6 +275,20 @@ fi
 
 [ -f "$REPORT_TMP_DIR/index.html" ] || die "generation finished but $REPORT_TMP_DIR/index.html is missing"
 [ -s "$REPORT_TMP_DIR/index.html" ] || die "generation finished but index.html is empty (see archi issue #980)"
+
+# Drop favicon files into the report root regardless of USE_MODERN_CSS - Archi
+# itself ships none, so the served report otherwise has no favicon at all.
+# Browsers request /favicon.ico from the server root implicitly even without
+# an explicit <link rel="icon">, so this alone fixes the missing-icon tab even
+# when USE_MODERN_CSS=false. model.js (themed build only, see below) adds the
+# explicit <link> tags with the extra PNG sizes on top, for browsers/OSes that
+# prefer those over the bare .ico.
+if [ -d "$REPORT_THEME_DIR/favicon" ]; then
+    cp -f "$REPORT_THEME_DIR"/favicon/*.ico "$REPORT_THEME_DIR"/favicon/*.png "$REPORT_TMP_DIR/" \
+        || die "failed to copy favicon files"
+else
+    log "WARNING: $REPORT_THEME_DIR/favicon not found, report will have no favicon"
+fi
 
 # Overlay our RU/EN + light/dark theme on top of Archi's stock report assets.
 # Every generated page (index.html, elements/*.html, views/*.html) only ever

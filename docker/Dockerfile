@@ -12,10 +12,15 @@
 ARG ARCHI_VERSION=latest
 ARG TARGETARCH
 
-FROM golang:1.23-alpine AS webhook-builder
+# Floating 1.x tag (not a pinned patch version) so the Go toolchain/base image
+# picks up security fixes automatically on rebuild - same layer-cache caveat
+# as ARCHI_VERSION=latest below applies (--no-cache to force a fresh pull).
+# go.mod pins the minimum language version (go 1.23); any 1.x toolchain that
+# satisfies it works, so there's nothing to keep in sync by hand here.
+FROM golang:1-alpine AS webhook-builder
 ARG TARGETARCH
 WORKDIR /src
-COPY webhook/go.mod webhook/main.go ./
+COPY docker/webhook/go.mod docker/webhook/main.go ./
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o /out/archi-webhook .
 
 
@@ -34,10 +39,20 @@ RUN set -eux; \
     if [ "$ARCHI_VERSION" = "latest" ]; then \
         LATEST_JSON=$(curl -fsSL https://api.github.com/repos/archimatetool/archi.io/releases/latest); \
         ARCHI_VERSION=$(printf '%s' "$LATEST_JSON" | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/'); \
+        # archi.io release tags switched to underscores (e.g. "5_9_0") at some
+        # point after this project's earlier releases, which used dotted tags
+        # matching the asset filename. Normalize back to dots so ARCHI_VERSION
+        # (used below for both the tag path fallback and the persisted
+        # .archi_version file) stays in the dotted form the rest of this
+        # project/README/CLAUDE.md assumes.
+        ARCHI_VERSION=$(printf '%s' "$ARCHI_VERSION" | tr '_' '.'); \
     fi; \
     echo "Resolved ARCHI_VERSION=${ARCHI_VERSION}"; \
+    # The release *tag* uses underscores (e.g. "5_9_0") but the asset
+    # *filename* still uses dots (e.g. "Archi-Linux64-5.9.0.tgz") - confirmed
+    # against the actual archi.io releases page, not just the API response.
     curl -fsSL -o /tmp/archi.tgz \
-      "https://github.com/archimatetool/archi.io/releases/download/${ARCHI_VERSION}/Archi-Linux64-${ARCHI_VERSION}.tgz"; \
+      "https://github.com/archimatetool/archi.io/releases/download/$(printf '%s' "$ARCHI_VERSION" | tr '.' '_')/Archi-Linux64-${ARCHI_VERSION}.tgz"; \
     mkdir -p /opt/archi; \
     tar -xzf /tmp/archi.tgz -C /opt/archi --strip-components=1; \
     rm -f /tmp/archi.tgz; \
@@ -45,7 +60,12 @@ RUN set -eux; \
     echo "${ARCHI_VERSION}" > /opt/archi/.archi_version
 
 
-FROM maven:3.9-eclipse-temurin-21 AS archi-linux-arm64
+# Floating 3.x tag (not a pinned patch version, e.g. not 3.9.9) for the same
+# reason as golang:1-alpine above — Maven itself has no compatibility
+# requirement here, only the JDK major version (21) matters for building
+# Archi, so there's nothing gained by pinning the Maven patch version by
+# hand. Same layer-cache caveat as ARCHI_VERSION=latest applies.
+FROM maven:3-eclipse-temurin-21 AS archi-linux-arm64
 
 # Same resolution semantics as archi-linux-amd64 above, but the source repo
 # (archimatetool/archi) tags releases as "release_<version>", not the bare
@@ -54,7 +74,7 @@ FROM maven:3.9-eclipse-temurin-21 AS archi-linux-arm64
 # one image build never publish mismatched Archi versions.
 ARG ARCHI_VERSION
 
-COPY patches/archi-pom-add-linux-gtk-aarch64.patch /tmp/archi-pom-add-linux-gtk-aarch64.patch
+COPY docker/patches/archi-pom-add-linux-gtk-aarch64.patch /tmp/archi-pom-add-linux-gtk-aarch64.patch
 
 # Build-speed trim, deliberately NOT part of the committed patch (see
 # docs/PATCHES.md — the patch itself stays additive/portable). This
@@ -159,17 +179,27 @@ RUN set -eux; \
 
 COPY --from=webhook-builder /out/archi-webhook /usr/local/bin/archi-webhook
 
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY generate.sh /usr/local/bin/generate.sh
-COPY Caddyfile /etc/caddy/Caddyfile
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY docker/generate.sh /usr/local/bin/generate.sh
+COPY docker/Caddyfile /etc/caddy/Caddyfile
 RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/generate.sh /usr/local/bin/archi-webhook
 
-# RU/EN + light/dark report theme, overlaid onto Archi's generated report by
-# generate.sh after each run (see REPORT_THEME_DIR there) - overwrites just
-# the 4 static asset files every generated page references, so the whole
-# report is themed/localized without templating the hundreds of per-element/
-# per-view pages Archi itself generates.
-COPY report-theme /opt/report-theme
+# RU/EN + light/dark report theme (css/js), overlaid onto Archi's generated
+# report by generate.sh after each run (see REPORT_THEME_DIR there). The
+# css/js overlay overwrites just the 4 static asset files every generated
+# page references, so the whole report is themed/localized without
+# templating the hundreds of per-element/per-view pages Archi itself
+# generates - see docs/THEMING.md.
+COPY docker/report-theme /opt/report-theme
+
+# Favicon set (Archi's own report ships none - see docs/THEMING.md), copied
+# unconditionally by generate.sh regardless of USE_MODERN_CSS. Sourced
+# directly from assets/favicon/ (the repo's single source of truth for the
+# project logo/mark) rather than keeping a second hand-synced copy under
+# docker/report-theme/ - the build context is the repo root specifically so
+# this COPY can reach it. favicon.svg itself is skipped (only the pre-
+# rasterized .ico/.png variants are needed at runtime).
+COPY assets/favicon/*.ico assets/favicon/*.png /opt/report-theme/favicon/
 
 # /data/repo    — working copy of the git repository
 # /data/report  — generated HTML report, served by Caddy

@@ -34,6 +34,10 @@ die() {
 }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Build context is the repo root, same as the real release build (see
+# README.md "Building and publishing the image") — the Dockerfile pulls
+# favicon assets from assets/favicon/, one level up from docker/.
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 IMAGE="${IMAGE:-archi-report:smoke-test}"
 ARCHI_VERSION="${ARCHI_VERSION:-latest}"
 PLAIN_REPO="https://github.com/archimatetool/ArchiModels.git"
@@ -53,9 +57,10 @@ if [ -z "${SKIP_BUILD:-}" ]; then
     log "building $IMAGE (ARCHI_VERSION=$ARCHI_VERSION, host platform only)"
     docker buildx build \
         --load \
+        -f "$SCRIPT_DIR/Dockerfile" \
         --build-arg "ARCHI_VERSION=$ARCHI_VERSION" \
         -t "$IMAGE" \
-        "$SCRIPT_DIR" \
+        "$REPO_ROOT" \
         || die "docker build failed"
 else
     log "SKIP_BUILD set — reusing existing image $IMAGE"

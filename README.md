@@ -25,6 +25,10 @@
 
 <p align="center">🇷🇺 <a href="#russian">Русский</a> · 🇬🇧 <a href="#english">English</a></p>
 
+<p align="center">
+  <img src="assets/screenshots/report-dark-ru.png" alt="archimate-report: тематизированный HTML-отчёт, тёмная тема" width="820">
+</p>
+
 ---
 
 <a id="russian"></a>
@@ -44,7 +48,7 @@ RU+EN):
 
 | Документ | О чём |
 |---|---|
-| 🐳 [docs/CADDY.md](docs/CADDY.md) | Единственный публичный процесс: раздача отчёта + reverse proxy на вебхук, TLS-терминация снаружи, почему публикация атомарна |
+| 🐳 [docs/CADDY.md](docs/CADDY.md) | Единственный публичный процесс: раздача отчёта + reverse proxy на вебхук, TLS-терминация снаружи, как устроена публикация отчёта |
 | 🎨 [docs/THEMING.md](docs/THEMING.md) | RU/EN + light/dark тема отчёта (`USE_MODERN_CSS`): как устроена, как кастомизировать |
 | 🪝 [docs/WEBHOOK.md](docs/WEBHOOK.md) | Go-listener `archi-webhook`: три схемы проверки подписи, однослотовый дебаунс, формат `/status` |
 | 🧩 [docs/PATCHES.md](docs/PATCHES.md) | Аддитивный патч для нативной arm64-сборки Archi из исходников — зачем он и как встроен в `docker/Dockerfile` |
@@ -71,12 +75,22 @@ RU+EN):
   через полноценный Markdown-рендер прямо в браузере, так что документация
   модели наконец выглядит как документация, а не как простыня текста.
   Подробности — [docs/THEMING.md](docs/THEMING.md).
+
+<p align="center">
+  <img src="assets/screenshots/collage.png" alt="archimate-report: light/dark × RU/EN" width="720">
+</p>
+
 - **Вебхук с дебаунсом.** `github`/`gitlab`/`generic`-подписи, однослотовая
   очередь — параллельные пуши не порождают гонку между генерациями.
-- **Атомарная публикация.** Отчёт никогда не отдаётся наполовину
-  сгенерированным — валидация (`index.html` не пустой, см.
-  [archi#980](https://github.com/archimatetool/archi/issues/980)) и swap
-  происходят до подмены содержимого раздаваемой директории.
+- **Валидация перед публикацией.** Отчёт сначала генерируется во временную
+  директорию и проверяется (`index.html` не пустой, см.
+  [archi#980](https://github.com/archimatetool/archi/issues/980)) — только
+  потом его содержимое подменяет то, что раздаёт Caddy. Сама подмена — не
+  единый атомарный `rename(2)` (это ломается, если `/data/report`
+  смонтирован как том — см. «Тома» ниже), а быстрая последовательность
+  `mv`, так что в теории возможно исчезающе короткое окно смешанного
+  старого/нового содержимого — на практике не проблема, т.к. отчёт и так
+  перегенерируется целиком на каждом прогоне.
 - **Без сюрпризов на старте.** Healthcheck, таймауты и ретраи git-операций,
   понятные fail-fast ошибки конфигурации вместо тихо-неработающего сервиса.
 
@@ -104,7 +118,7 @@ docker run -d \
 | `MODEL_FORMAT` | нет | `auto` (по умолчанию) / `plain` / `coarchi` |
 | `GIT_TOKEN` | нет* | HTTPS-токен (PAT) |
 | `GIT_USERNAME` / `GIT_PASSWORD` | нет* | логин+пароль для HTTPS |
-| `GIT_SSH_PRIVATE_KEY` | нет* | приватный SSH-ключ (PEM или base64) |
+| `GIT_SSH_PRIVATE_KEY` | нет* | приватный SSH-ключ (PEM или base64) ⚠️ пока не протестировано end-to-end |
 | `GIT_SSH_KNOWN_HOSTS` | нет | содержимое known_hosts; без него — TOFU (`accept-new`) |
 | `WEBHOOK_SECRET` | нет | если задан — включает `/webhook` |
 | `WEBHOOK_PROVIDER` | нет** | `github` / `gitlab` / `generic` — обязателен, если задан `WEBHOOK_SECRET` |
@@ -302,13 +316,23 @@ CI не используется для автосборки на каждый �
 выходу новой версии Archi:
 
 ```bash
-cd docker
 docker buildx build \
+  -f docker/Dockerfile \
   --platform linux/amd64,linux/arm64 \
-  -t umkabeaf/archimate-report:<ARCHI_VERSION> \
-  -t umkabeaf/archimate-report:latest \
+  -t <your-dockerhub-namespace>/archimate-report:<ARCHI_VERSION> \
+  -t <your-dockerhub-namespace>/archimate-report:latest \
   --push .
 ```
+
+(`umkabeaf/archimate-report`, встречающийся выше в этом README — наш
+опубликованный образ, его можно тянуть как есть.
+`<your-dockerhub-namespace>` здесь — только для форков, публикующих
+собственную копию; подставьте свой Docker Hub username/org.)
+
+Запускается из корня репозитория (не из `docker/`) — контекст сборки
+специально расширен до корня, чтобы `Dockerfile` мог забрать favicon прямо из
+`assets/favicon/`, не держа второй, вручную синхронизируемый набор файлов
+внутри `docker/`.
 
 `ARCHI_VERSION` можно передать явно через `--build-arg ARCHI_VERSION=5.9.0`,
 по умолчанию резолвится `latest` через GitHub Releases API в момент сборки.
@@ -316,6 +340,18 @@ docker buildx build \
 Тот же multi-arch build+push можно запустить и вручную из GitHub Actions —
 см. `.github/workflows/docker-publish.yml` (`workflow_dispatch`, без
 автозапуска на каждый push).
+
+Тот же `workflow_dispatch`-запуск (когда `push` не выключен явно) заодно
+публикует `docs/DOCKERHUB.md` как длинное описание репозитория на странице
+Docker Hub — отдельный шаг делать не нужно, он использует те же секреты
+`DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN`, что и логин в реестр. Тот же скрипт
+(`docker/publish-dockerhub-readme.sh`) можно запустить и вручную, локально,
+если нужно обновить только описание, не пересобирая образ:
+
+```bash
+DOCKERHUB_USERNAME=your-dockerhub-user DOCKERHUB_TOKEN=dckr_pat_xxx \
+  ./docker/publish-dockerhub-readme.sh
+```
 
 ### 📄 Лицензия
 
@@ -344,7 +380,7 @@ Deeper topics live in their own docs (all bilingual, RU+EN):
 
 | Doc | What's in it |
 |---|---|
-| 🐳 [docs/CADDY.md](docs/CADDY.md) | The single public-facing process: serving the report + reverse proxy to the webhook, TLS termination left to you, why publishing is atomic |
+| 🐳 [docs/CADDY.md](docs/CADDY.md) | The single public-facing process: serving the report + reverse proxy to the webhook, TLS termination left to you, how report publishing works |
 | 🎨 [docs/THEMING.md](docs/THEMING.md) | The RU/EN + light/dark report theme (`USE_MODERN_CSS`): how it works, how to customize it |
 | 🪝 [docs/WEBHOOK.md](docs/WEBHOOK.md) | The `archi-webhook` Go listener: the three signature-verification schemes, the single-slot debounce, the `/status` shape |
 | 🧩 [docs/PATCHES.md](docs/PATCHES.md) | The additive patch behind the native arm64 Archi source build — why it exists and how it's wired into `docker/Dockerfile` |
@@ -371,13 +407,22 @@ Deeper topics live in their own docs (all bilingual, RU+EN):
   Markdown renderer right in the browser, so your model's documentation
   finally looks like documentation instead of a wall of text. Details in
   [docs/THEMING.md](docs/THEMING.md).
+
+<p align="center">
+  <img src="assets/screenshots/collage.png" alt="archimate-report: light/dark × RU/EN" width="720">
+</p>
+
 - **Debounced webhook.** `github`/`gitlab`/`generic` signature schemes, a
   single-slot queue — concurrent pushes never race two generations against
   each other.
-- **Atomic publishing.** The report is never served half-generated —
-  validation (non-empty `index.html`, see
-  [archi#980](https://github.com/archimatetool/archi/issues/980)) and the
-  swap happen before the served directory's contents change.
+- **Validated before publishing.** The report is generated into a scratch
+  directory and checked (non-empty `index.html`, see
+  [archi#980](https://github.com/archimatetool/archi/issues/980)) — only
+  then does its content replace what Caddy serves. That swap isn't a single
+  atomic `rename(2)` (that breaks the moment `/data/report` is a mounted
+  volume — see "Volumes" below), just a fast sequence of `mv`s, so in theory
+  there's a vanishingly short window of mixed old/new content — not an issue
+  in practice since the report is regenerated wholesale on every run anyway.
 - **No surprises at startup.** Healthcheck, git operation timeouts/retries,
   and clear fail-fast configuration errors instead of a silently broken
   service.
@@ -406,7 +451,7 @@ The report is available at `http://localhost:3000` a few seconds after start
 | `MODEL_FORMAT` | no | `auto` (default) / `plain` / `coarchi` |
 | `GIT_TOKEN` | no* | HTTPS token (PAT) |
 | `GIT_USERNAME` / `GIT_PASSWORD` | no* | login+password for HTTPS |
-| `GIT_SSH_PRIVATE_KEY` | no* | private SSH key (PEM or base64) |
+| `GIT_SSH_PRIVATE_KEY` | no* | private SSH key (PEM or base64) ⚠️ not tested end-to-end yet |
 | `GIT_SSH_KNOWN_HOSTS` | no | known_hosts content; without it — TOFU (`accept-new`) |
 | `WEBHOOK_SECRET` | no | if set, enables `/webhook` |
 | `WEBHOOK_PROVIDER` | no** | `github` / `gitlab` / `generic` — required if `WEBHOOK_SECRET` is set |
@@ -495,13 +540,22 @@ No CI auto-builds on every commit — publishing is manual, triggered by a new
 Archi release:
 
 ```bash
-cd docker
 docker buildx build \
+  -f docker/Dockerfile \
   --platform linux/amd64,linux/arm64 \
-  -t umkabeaf/archimate-report:<ARCHI_VERSION> \
-  -t umkabeaf/archimate-report:latest \
+  -t <your-dockerhub-namespace>/archimate-report:<ARCHI_VERSION> \
+  -t <your-dockerhub-namespace>/archimate-report:latest \
   --push .
 ```
+
+(`umkabeaf/archimate-report` earlier in this README is *our* published image —
+pull that as-is. `<your-dockerhub-namespace>` here is only for forks
+publishing their own copy; substitute your own Docker Hub username/org.)
+
+Run from the repo root (not `docker/`) — the build context is deliberately
+the whole repo so the `Dockerfile` can pull favicons straight from
+`assets/favicon/` instead of keeping a second, hand-synced copy under
+`docker/`.
 
 `ARCHI_VERSION` can be pinned explicitly via `--build-arg
 ARCHI_VERSION=5.9.0`; it defaults to resolving `latest` via the GitHub
@@ -510,6 +564,19 @@ Releases API at build time.
 The same multi-arch build+push can also be run manually from GitHub Actions
 — see `.github/workflows/docker-publish.yml` (`workflow_dispatch`, no
 auto-trigger on every push).
+
+The same `workflow_dispatch` run (as long as `push` isn't explicitly disabled)
+also publishes `docs/DOCKERHUB.md` as the repository's long description on the
+Docker Hub page — no separate step needed, it reuses the same
+`DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` secrets as the registry login. The same
+script (`docker/publish-dockerhub-readme.sh`) can also be run manually,
+locally, if you only need to update the description without rebuilding the
+image:
+
+```bash
+DOCKERHUB_USERNAME=your-dockerhub-user DOCKERHUB_TOKEN=dckr_pat_xxx \
+  ./docker/publish-dockerhub-readme.sh
+```
 
 ### 📄 License
 

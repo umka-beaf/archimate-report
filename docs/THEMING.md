@@ -30,7 +30,7 @@ js/frame.js
 `docker/report-theme/` содержит замену всех четырёх. `generate.sh` копирует
 их поверх версий Archi после генерации, прямо перед публикацией отчёта (см.
 [`generate.sh`](../docker/generate.sh) и раздел «Тома» в
-[README](../README.md#тома) про то, как сама публикация остаётся атомарной).
+[README](../README.md#тома) про то, как устроена сама публикация).
 Поскольку все страницы ссылаются на эти четыре файла, их перезапись
 ретематизирует/релокализует весь отчёт разом — без пер-страничного
 шаблонирования, без патчинга вывода самого Archi.
@@ -59,9 +59,29 @@ js/frame.js
   сравнению со штатной раскладкой Archi — чтобы у отрендеренного Markdown
   было достаточно места.
 
+### Favicon
+
+Штатный отчёт Archi вообще не отдаёт favicon. `assets/favicon/`
+(`favicon.ico` + PNG на 16/32/48/192/512px, `apple-touch-icon.png` на 180px —
+все растеризованы из `assets/favicon/favicon.svg`, левой «квадратной» части
+основного `assets/logo.svg`, без текста) — единственный источник этих файлов
+в репозитории; `Dockerfile` копирует их прямо оттуда в `/opt/report-theme/favicon/`
+на этапе сборки образа (build-контекст — корень репозитория, а не `docker/`,
+именно ради этого), без второй, вручную синхронизируемой копии внутри
+`docker/report-theme/`. Дальше `generate.sh` копирует их в корень отчёта
+**независимо от `USE_MODERN_CSS`** — браузеры сами запрашивают
+`/favicon.ico` с корня сервера даже без явного `<link>`-тега, так что иконка
+появляется в обоих режимах. `js/model.js` (только в темизированной сборке)
+дополнительно добавляет явные `<link rel="icon"/apple-touch-icon">`-теги на
+`index.html` (единственная страница верхнего уровня — `elements/*.html` и
+`views/*.html` грузятся внутри `<iframe>` через `frame.js`, чей favicon вкладка
+браузера не показывает), чтобы современные браузеры/ОС брали PNG большего
+разрешения вместо голого `.ico`.
+
 ### Отключение
 
-`USE_MODERN_CSS=false` полностью пропускает оверлей — `generate.sh` пишет в
+`USE_MODERN_CSS=false` полностью пропускает оверлей CSS/JS (favicon остаётся —
+см. выше) — `generate.sh` пишет в
 лог, что отдаёт штатный отчёт Archi, и оставляет все четыре файла ровно
 такими, какими их сгенерировал сам Archi. Полезно, если нужен оригинальный
 вид или если тема переопределяется собственным форком
@@ -107,7 +127,7 @@ js/frame.js
 them over Archi's own versions after generation, right before the report is
 published (see [`generate.sh`](../docker/generate.sh) and the "Volumes"
 section in the [README](../README.md#volumes) for how publishing itself
-stays atomic). Because every page shares these four files, overwriting them
+works). Because every page shares these four files, overwriting them
 re-themes/re-localizes the entire report at once — no per-page templating,
 no patching Archi's own output.
 
@@ -135,9 +155,29 @@ no patching Archi's own output.
   Analysis) than Archi's stock layout, to give rendered Markdown enough
   room.
 
+### Favicon
+
+Archi's stock report ships no favicon at all. `assets/favicon/`
+(`favicon.ico` + PNGs at 16/32/48/192/512px, plus a 180px `apple-touch-icon.png`
+— all rasterized from `assets/favicon/favicon.svg`, the square "mark" half of
+the main `assets/logo.svg`, without the text) is this repo's single source of
+truth for these files; the `Dockerfile` copies them straight from there into
+`/opt/report-theme/favicon/` at image build time (the build context is the
+repo root, not `docker/`, specifically so this `COPY` can reach them) — no
+second, hand-synced copy lives under `docker/report-theme/`. `generate.sh`
+then copies them into the report root **regardless of `USE_MODERN_CSS`** — browsers request
+`/favicon.ico` off the server root implicitly even without an explicit
+`<link>` tag, so the icon shows up either way. `js/model.js` (themed build
+only) additionally injects explicit `<link rel="icon"/apple-touch-icon">` tags
+into `index.html` (the only top-level page — `elements/*.html` and
+`views/*.html` load inside an `<iframe>` via `frame.js`, whose favicon a
+browser tab never shows), so modern browsers/OSes pick the higher-res PNGs
+over the bare `.ico`.
+
 ### Turning it off
 
-`USE_MODERN_CSS=false` skips the overlay entirely — `generate.sh` logs that
+`USE_MODERN_CSS=false` skips the CSS/JS overlay entirely (the favicon stays —
+see above) — `generate.sh` logs that
 it's serving Archi's stock report and leaves the four files exactly as Archi
 generated them. Useful if you want the original look, or if you're
 overriding the theme with your own fork of `docker/report-theme/`.

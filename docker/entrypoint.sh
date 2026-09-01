@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Timestamp format matches generate.sh and archi-webhook's log.Ldate|log.Ltime
+# Timestamp format matches generate.sh's log() and archi-webhook's logf()
 # (see webhook/main.go) so `docker logs` output from all three processes
 # sorts/greps consistently — deliberately not full JSON, this is a
 # single-container service with no downstream log aggregator, plain

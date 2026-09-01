@@ -125,9 +125,9 @@ func runGenerateOnce() error {
 
 // lastNonEmptyLine returns the last non-blank line of s, truncated to a
 // reasonable length for a JSON status field. generate.sh's die() writes its
-// message as the final stderr line before exiting, so this is normally the
-// actual human-readable reason for the failure (e.g. "die: model repository
-// clone failed after 3 attempts") rather than raw Java stack-trace noise.
+// message as the final stderr line before exiting (prefixed "ERROR: ..."),
+// so this is normally the actual human-readable reason for the failure
+// rather than raw Java stack-trace noise.
 func lastNonEmptyLine(s string) string {
 	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
 	for i := len(lines) - 1; i >= 0; i-- {

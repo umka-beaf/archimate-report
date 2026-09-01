@@ -25,6 +25,14 @@ on:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    env:
+      # No project-specific default here on purpose — a fork publishing its
+      # own copy under a different Docker Hub account/org only needs to set
+      # the DOCKERHUB_NAMESPACE repository variable (Settings -> Secrets and
+      # variables -> Actions -> Variables), not edit this workflow file.
+      # Falls back to the Docker Hub login username, which is the correct
+      # namespace for any personal (non-org) account.
+      DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || secrets.DOCKERHUB_USERNAME }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -50,11 +58,11 @@ jobs:
             VERSION="${VERSION#v}"
           fi
 
-          TAGS="umkabeaf/archimate-report:latest"
+          TAGS="${DOCKERHUB_NAMESPACE}/archimate-report:latest"
           BUILD_ARGS=""
           if [ -n "$VERSION" ]; then
             TAGS="$TAGS
-          umkabeaf/archimate-report:$VERSION"
+          ${DOCKERHUB_NAMESPACE}/archimate-report:$VERSION"
             BUILD_ARGS="ARCHI_VERSION=$VERSION"
           fi
 
@@ -70,10 +78,29 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: ./docker
+          context: .
+          file: docker/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event.inputs.push != 'false' }}
           build-args: ${{ steps.version.outputs.build_args }}
           tags: ${{ steps.version.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Same manual trigger that publishes the image also syncs the Docker
+      # Hub repo page's long description from docs/DOCKERHUB.md - one button
+      # covers both instead of remembering to separately run
+      # docker/publish-dockerhub-readme.sh by hand with a locally-exported
+      # PAT. Skipped on dry runs (push=false) since there's nothing new to
+      # describe if the image itself wasn't published. Reuses the same
+      # DOCKERHUB_USERNAME/DOCKERHUB_TOKEN secrets as the login step above.
+      - name: Publish Docker Hub README
+        if: ${{ github.event.inputs.push != 'false' }}
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          # Kept in sync with the build step's tags above, in case they ever
+          # diverge (e.g. publishing under an org whose name differs from the
+          # login username).
+          DOCKERHUB_NAMESPACE: ${{ env.DOCKERHUB_NAMESPACE }}
+        run: ./docker/publish-dockerhub-readme.sh

@@ -147,10 +147,35 @@ function appendThemeAndLangToggle() {
 	arcUpdateToggleUI();
 }
 
+// index.html is the only page the browser tab itself renders (elements/*.html
+// and views/*.html load inside an iframe via frame.js, whose favicon a tab
+// never shows) - so this is the one place worth adding explicit <link
+// rel="icon"> tags. generate.sh already drops the actual files (favicon.ico
+// + PNGs) into the report root unconditionally; these tags just point modern
+// browsers/OSes at the higher-res PNG variants instead of the bare .ico.
+function appendFaviconLinks() {
+	var head = document.head;
+	if (!head || document.querySelector('link[rel="icon"]')) return;
+
+	[
+		['icon', 'image/png', '32x32', 'favicon-32.png'],
+		['icon', 'image/png', '192x192', 'favicon-192.png'],
+		['apple-touch-icon', null, '180x180', 'apple-touch-icon.png']
+	].forEach(function (entry) {
+		var link = document.createElement('link');
+		link.rel = entry[0];
+		if (entry[1]) link.type = entry[1];
+		link.sizes = entry[2];
+		link.href = entry[3];
+		head.appendChild(link);
+	});
+}
+
 $(document).ready(function() {
 	// Apply stored/detected language + theme before anything else paints
 	arcApplyPreferences();
 	appendThemeAndLangToggle();
+	appendFaviconLinks();
 
 	// Set jQuery UI Layout panes
   $('body').layout({
