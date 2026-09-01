@@ -239,6 +239,31 @@ docker network create common
   фрагменты, апстрим их просто никогда не запрашивал. Патч, добавляющий этот
   target, аддитивный и лежит в `docker/patches/`.
 
+### Проверка перед релизом (`docker/smoke-test.sh`)
+
+Т.к. CI не пересобирает образ на каждый коммит (см. ниже), перед ручным
+релизом стоит прогнать `docker/smoke-test.sh` — он собирает образ **только
+под host-платформу** (multi-arch manifest через `--load` не собрать) и
+гоняет regression-проверки логики, одинаковой на обеих архитектурах:
+`generate.sh`, `entrypoint.sh`, Caddyfile, вебхук.
+
+Проверяет: plain-формат модели (явный `MODEL_PATH`) и coArchi-формат с
+автоопределением — в обоих случаях контейнер поднимается, `GET /status`
+отдаёт валидный JSON, отчёт отдаётся по HTTP 200 и не пустой; плюс реальный
+вебхук-раунд-трип (верный секрет → `202` → дожидаемся завершения
+перегенерации; неверный секрет → `401`).
+
+```bash
+./docker/smoke-test.sh                       # build + test, ARCHI_VERSION=latest
+ARCHI_VERSION=5.9.0 ./docker/smoke-test.sh    # с пином версии
+SKIP_BUILD=1 IMAGE=archi-report:m5 ./docker/smoke-test.sh   # переиспользовать уже собранный образ
+```
+
+Оставляет за собой запущенные контейнеры только на время прогона — они
+убираются автоматически (`trap cleanup EXIT`) независимо от исхода. Exit 0 —
+можно переходить к реальной multi-arch сборке и `--push`; ненулевой код —
+читать лог над упавшей проверкой и не публиковать образ.
+
 ### Сборка и публикация образа
 
 CI не используется для автосборки на каждый коммит — публикация ручная, по
@@ -255,8 +280,10 @@ docker buildx build \
 
 `ARCHI_VERSION` можно передать явно через `--build-arg ARCHI_VERSION=5.9.0`,
 по умолчанию резолвится `latest` через GitHub Releases API в момент сборки.
-Перед релизом полезно прогнать `docker/smoke-test.sh` — регрессионные
-проверки `generate.sh`/вебхука/Caddy на host-платформе.
+
+Тот же multi-arch build+push можно запустить и вручную из GitHub Actions —
+см. `.github/workflows/docker-publish.yml` (`workflow_dispatch`, без
+автозапуска на каждый push).
 
 ### Лицензия
 
@@ -385,6 +412,31 @@ survive `docker rm`:
   fragments, upstream just never requested that target. The additive patch
   lives in `docker/patches/`.
 
+### Pre-release checks (`docker/smoke-test.sh`)
+
+Since CI doesn't rebuild the image on every commit (see below), run
+`docker/smoke-test.sh` before a manual release. It builds the image for the
+**host platform only** (a multi-arch manifest can't be produced with
+`--load`) and runs regression checks against the logic shared by both
+architectures: `generate.sh`, `entrypoint.sh`, the Caddyfile, the webhook.
+
+It checks: the plain model format (explicit `MODEL_PATH`) and the coArchi
+format with auto-detection — in both cases the container comes up, `GET
+/status` returns valid JSON, the report is served over HTTP 200 and isn't
+empty; plus a real webhook round-trip (correct secret → `202` → wait for the
+regeneration to finish; wrong secret → `401`).
+
+```bash
+./docker/smoke-test.sh                       # build + test, ARCHI_VERSION=latest
+ARCHI_VERSION=5.9.0 ./docker/smoke-test.sh    # pin a version
+SKIP_BUILD=1 IMAGE=archi-report:m5 ./docker/smoke-test.sh   # reuse an already-built image
+```
+
+Containers it starts only live for the duration of the run — cleaned up
+automatically (`trap cleanup EXIT`) regardless of outcome. Exit 0 means it's
+safe to move on to the real multi-arch build and `--push`; a non-zero exit
+means read the log above the failing check and don't publish the image.
+
 ### Building and publishing the image
 
 No CI auto-builds on every commit — publishing is manual, triggered by a new
@@ -399,8 +451,13 @@ docker buildx build \
   --push .
 ```
 
-Run `docker/smoke-test.sh` before a release — regression checks for
-`generate.sh`/webhook/Caddy on the host platform.
+`ARCHI_VERSION` can be pinned explicitly via `--build-arg
+ARCHI_VERSION=5.9.0`; it defaults to resolving `latest` via the GitHub
+Releases API at build time.
+
+The same multi-arch build+push can also be run manually from GitHub Actions
+— see `.github/workflows/docker-publish.yml` (`workflow_dispatch`, no
+auto-trigger on every push).
 
 ### License
 

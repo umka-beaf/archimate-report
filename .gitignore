@@ -2,35 +2,10 @@
 # https://github.com/archimatetool/archi.io/releases — not our content.
 /Archi/
 
-# Cloned example repositories used only to inspect format/structure —
-# they are their own git repos (nested .git), not ours to track.
-spikes/coarchi-example/
-spikes/coarchi-glycam/
-
-# Cloned upstream Archi source (nested .git) + Tycho/Maven build output and
-# raw build logs — reproducible from upstream, not ours to track.
-spikes/archi-source/
-spikes/archi-source-build-logs/
-
-# Generated report output from spikes — reproducible artifacts (mostly
-# vendored static assets bootstrap/jquery/alasql copied by Archi itself).
-# Keep the source models and run logs, drop the generated HTML/PNG output.
-/spikes/m0-cli-report/report/
-/spikes/m0-cli-report/report-archisurance/
-/spikes/coarchi-glycam-report/
-/spikes/item3-properties-test/report/
-
-# spikes/test_report/ was a full Archi-generated report used as the working
-# area for the RU/EN + light/dark theme (CLAUDE.md §28) — only css/ and js/
-# are our actual source (now the canonical copy lives in
-# docker/report-theme/, see §28.4); the rest is Archi's own generated
-# output (per-element/per-view pages + vendored bootstrap/jquery-ui/etc.),
-# reproducible by re-running the report generator, not ours to track.
-/spikes/test_report/elements/
-/spikes/test_report/hints/
-/spikes/test_report/id-*/
-/spikes/test_report/index.html
-/spikes/test_report/lib/
+# Local spikes/experiments — never pushed to any remote (private history
+# already carries some of it from before this decision; going forward the
+# whole directory is untracked and stays local-only).
+/spikes/
 
 # Misc
 .DS_Store
