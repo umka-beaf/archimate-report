@@ -1,15 +1,54 @@
 # archimate-report
 
-Docker-образ, который клонирует git-репозиторий с ArchiMate-моделью (одиночный
-`*.archimate` или coArchi-репозиторий), генерирует HTML-отчёт через
-[Archi CLI](https://github.com/archimatetool/archi/wiki/Archi-Command-Line-Interface)
-и раздаёт его статикой через Caddy. Поддерживает вебхук для перегенерации по
-пушу. Публикуется как multi-arch (`linux/amd64` + `linux/arm64`, честная
-нативная сборка на обеих архитектурах — без эмуляции, подробности в
-[CLAUDE.md](CLAUDE.md) §5, §15.9–§15.10) образ:
-[`umkabeaf/archimate-report`](https://hub.docker.com/r/umkabeaf/archimate-report).
+<p align="center">
+  <b>Один <code>docker run</code> — и ваша ArchiMate-модель из git превращается в живой,<br>
+  автообновляемый HTML-отчёт с RU/EN и light/dark темой.</b>
+</p>
 
-## Быстрый старт
+<p align="center">
+  <a href="https://hub.docker.com/r/umkabeaf/archimate-report"><img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/umkabeaf/archimate-report"></a>
+  <a href="https://hub.docker.com/r/umkabeaf/archimate-report"><img alt="Docker Image Size" src="https://img.shields.io/docker/image-size/umkabeaf/archimate-report/latest"></a>
+  <img alt="Platforms" src="https://img.shields.io/badge/platform-linux%2Famd64%20%7C%20linux%2Farm64-informational">
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green"></a>
+</p>
+
+<p align="center">🇷🇺 <a href="#russian">Русский</a> · 🇬🇧 <a href="#english">English</a></p>
+
+---
+
+<a id="russian"></a>
+## Русский
+
+Docker-образ, который клонирует git-репозиторий с ArchiMate-моделью
+(одиночный `*.archimate` **или** [coArchi](https://www.archimatetool.com/plugins/)-репозиторий,
+формат определяется автоматически), генерирует HTML-отчёт через
+[Archi CLI](https://github.com/archimatetool/archi/wiki/Archi-Command-Line-Interface)
+и раздаёт его статикой через [Caddy](https://caddyserver.com/). По вебхуку от
+GitHub/GitLab/чего угодно — перегенерирует отчёт при пуше в репозиторий модели.
+
+### Почему это может быть полезно
+
+- **Формат модели определяется сам.** Одиночный `.archimate`-файл или
+  coArchi-репозиторий (git-native формат модели, по файлу на элемент) — не
+  нужно ничего настраивать вручную в типичном случае.
+- **Честный multi-arch.** `linux/amd64` — официальная сборка Archi;
+  `linux/arm64` — Archi собран **нативно из исходников** (Tycho/Maven,
+  `linux/gtk/aarch64`) на этапе `docker buildx build`. Никакого QEMU/box64 в
+  рантайме контейнера — обе архитектуры работают на «своём» железе.
+- **RU/EN + light/dark тема отчёта из коробки** (`USE_MODERN_CSS`, включена
+  по умолчанию) — переключатель языка/темы прямо в отчёте, рендеринг
+  Markdown в документации элементов, более удобные пропорции панелей.
+  Хотите оригинальный вид Archi — один флаг всё выключает.
+- **Вебхук с дебаунсом.** `github`/`gitlab`/`generic`-подписи, однослотовая
+  очередь — параллельные пуши не порождают гонку между генерациями.
+- **Атомарная публикация.** Отчёт никогда не отдаётся наполовину
+  сгенерированным — валидация (`index.html` не пустой, см.
+  [archi#980](https://github.com/archimatetool/archi/issues/980)) и swap
+  происходят до подмены содержимого раздаваемой директории.
+- **Без сюрпризов на старте.** Healthcheck, таймауты и ретраи git-операций,
+  понятные fail-fast ошибки конфигурации вместо тихо-неработающего сервиса.
+
+### Быстрый старт
 
 ```bash
 docker run -d \
@@ -23,9 +62,7 @@ docker run -d \
 Отчёт будет доступен на `http://localhost:3000` через несколько секунд после
 старта (первая генерация выполняется синхронно перед запуском веб-сервера).
 
-## Переменные окружения
-
-Полный и всегда актуальный контракт — [CLAUDE.md](CLAUDE.md) §7. Кратко:
+### Переменные окружения
 
 | Переменная | Обязательна | Описание |
 |---|---|---|
@@ -35,7 +72,7 @@ docker run -d \
 | `MODEL_FORMAT` | нет | `auto` (по умолчанию) / `plain` / `coarchi` |
 | `GIT_TOKEN` | нет* | HTTPS-токен (PAT) |
 | `GIT_USERNAME` / `GIT_PASSWORD` | нет* | логин+пароль для HTTPS |
-| `GIT_SSH_PRIVATE_KEY` | нет* | приватный SSH-ключ (PEM или base64) ⚠️ не протестировано end-to-end, будет позже (см. CLAUDE.md §18.1) |
+| `GIT_SSH_PRIVATE_KEY` | нет* | приватный SSH-ключ (PEM или base64) |
 | `GIT_SSH_KNOWN_HOSTS` | нет | содержимое known_hosts; без него — TOFU (`accept-new`) |
 | `WEBHOOK_SECRET` | нет | если задан — включает `/webhook` |
 | `WEBHOOK_PROVIDER` | нет** | `github` / `gitlab` / `generic` — обязателен, если задан `WEBHOOK_SECRET` |
@@ -43,7 +80,7 @@ docker run -d \
 | `PORT` | нет | порт раздачи, по умолчанию `3000` |
 | `REGENERATE_ON_START` | нет | `true` (по умолчанию) / `false` |
 | `GENERATION_TIMEOUT` | нет | таймаут одного прогона генерации, сек (по умолчанию `600`) |
-| `USE_MODERN_CSS` | нет | `true` (по умолчанию) / `false` — RU/EN + light/dark тема отчёта поверх штатного Archi-вида; `false` отдаёт немодифицированный отчёт Archi |
+| `USE_MODERN_CSS` | нет | `true` (по умолчанию) / `false` — RU/EN + light/dark тема отчёта поверх штатного Archi-вида |
 | `TZ` | нет | таймзона контейнера |
 
 `*` — ровно один способ авторизации git (или ни одного — для публичных
@@ -53,13 +90,12 @@ docker run -d \
 `{generating, last_run_at, last_success, last_error}` — используется
 Docker-контейнером как healthcheck.
 
-## Вебхук
+### Вебхук
 
 Без `WEBHOOK_SECRET` эндпоинт `/webhook` вообще не зарегистрирован (запрос на
-него отдаёт 404) — безопасный дефолт, ничего не включается по умолчанию.
+него отдаёт 404) — безопасный дефолт, ничего не включается сам по себе.
 Если `WEBHOOK_SECRET` задан, `WEBHOOK_PROVIDER` обязателен — контейнер
 падает при старте с понятной ошибкой, если он не задан или задан неверно.
-Способ проверки подписи зависит от провайдера:
 
 | `WEBHOOK_PROVIDER` | Как проверяется | Заголовок/параметр |
 |---|---|---|
@@ -69,38 +105,31 @@ Docker-контейнером как healthcheck.
 
 Путь эндпоинта настраивается через `WEBHOOK_PATH` (по умолчанию `/webhook`).
 Успешный запрос сразу отвечает `202 Accepted` — генерация запускается
-асинхронно, ответ не ждёт её завершения. Прогресс/результат смотрите через
-`GET /status`.
+асинхронно. Прогресс/результат — через `GET /status`. Однослотовая
+очередь-дебаунс: параллельные пуши не порождают гонку между двумя
+одновременными `git clone`/Archi CLI.
 
-**Настройка в GitHub**: Settings → Webhooks → Add webhook, Payload URL —
-`https://<ваш-домен>/webhook`, Content type — `application/json`, Secret —
-значение `WEBHOOK_SECRET`, событие — `push`.
-
-**Настройка в GitLab**: Settings → Webhooks, URL — `https://<ваш-домен>/webhook`,
-Secret token — значение `WEBHOOK_SECRET`, триггер — `Push events`.
-
-**Ручной вызов для проверки** (`generic`-провайдер):
+**GitHub**: Settings → Webhooks → Add webhook — Payload URL
+`https://<домен>/webhook`, Content type `application/json`, Secret =
+`WEBHOOK_SECRET`, событие `push`.
+**GitLab**: Settings → Webhooks — URL `https://<домен>/webhook`, Secret
+token = `WEBHOOK_SECRET`, триггер `Push events`.
 
 ```bash
-curl -X POST "https://<ваш-домен>/webhook" \
-  -H "X-Webhook-Secret: change-me"
+# ручная проверка (generic-провайдер)
+curl -X POST "https://<домен>/webhook" -H "X-Webhook-Secret: change-me"
 ```
 
-Однослотовая очередь-дебаунс: если генерация уже идёт, второй прогон не
-запускается параллельно — он выполнится сразу после текущего. Параллельные
-пуши не порождают гонку между двумя одновременными `git clone`/Archi CLI.
+### Тома
 
-## Тома
-
-В образе (`Dockerfile`) есть три рабочие директории. Ни одна не объявлена
-инструкцией `VOLUME` — то есть без явного монтирования это обычные слои
-контейнера, не переживающие `docker rm`:
+Три рабочие директории, ни одна не объявлена `VOLUME` в образе — без явного
+монтирования это обычные слои контейнера, не переживающие `docker rm`:
 
 | Путь | Назначение | Монтировать? |
 |---|---|---|
-| `/data/report` | Готовый HTML-отчёт, который раздаёт Caddy | Да, если хотите, чтобы отчёт пережил пересоздание контейнера — особенно вместе с `REGENERATE_ON_START=false`, чтобы не ждать полной регенерации при каждом рестарте |
-| `/data/repo` | Рабочая копия git-репозитория с моделью | Опционально — при монтировании повторные запуски делают `git fetch` вместо полного `clone`, что быстрее на больших репозиториях |
-| `/data/secrets` | Временные файлы авторизации (SSH-ключ/токен/пароль), права `600` | Не монтируйте — создаются заново из env-переменных при каждом запуске `generate.sh`; volume тут только продлевает жизнь секретов на диске без пользы |
+| `/data/report` | Готовый HTML-отчёт, который раздаёт Caddy | Да, если хотите пережить пересоздание контейнера — особенно с `REGENERATE_ON_START=false` |
+| `/data/repo` | Рабочая копия git-репозитория с моделью | Опционально — ускоряет повторные запуски (`git fetch` вместо полного `clone`) |
+| `/data/secrets` | Временные файлы авторизации, права `600` | Нет — создаются заново из env-переменных при каждом запуске |
 
 ```bash
 docker run -d \
@@ -113,7 +142,7 @@ docker run -d \
   umkabeaf/archimate-report:latest
 ```
 
-## docker-compose
+### docker-compose
 
 ```yaml
 name: archimate-report
@@ -191,24 +220,29 @@ volumes:
 ```
 
 Сеть `common` объявлена как `external: true` — Compose её не создаёт сам, она
-должна существовать заранее, иначе `docker compose up` упадёт с ошибкой вида
-`network common declared as external, but could not be found`. Создаётся один
-раз (переживает `docker compose down`/пересоздание стека):
+должна существовать заранее:
 
 ```bash
 docker network create common
 ```
 
-Это удобно, когда перед сервисом уже стоит общий reverse-proxy (например,
-Caddy/Traefik) в отдельном compose-стеке, подключённый к той же сети — тогда
-`archimate-report` не публикует порт наружу напрямую, а достаётся прокси по
-имени контейнера внутри `common`. Если такого прокси нет и сеть заводить не
-хочется — просто уберите `x-network`/`networks` из примера и раскомментируйте
-`ports: - 3000:3000`, тогда сервис будет доступен напрямую на хосте.
+Это удобно, когда перед сервисом уже стоит общий reverse-proxy (Caddy/Traefik)
+в отдельном compose-стеке. Если такого прокси нет — уберите `x-network`/
+`networks` и раскомментируйте `ports: - 3000:3000`.
 
-## Сборка и публикация образа
+### Архитектуры
 
-CI не используется — публикация ручная, по выходу новой версии Archi:
+- `linux/amd64` — официальная сборка Archi (`Archi-Linux64-*.tgz`).
+- `linux/arm64` — Archi собран нативно из исходников (Tycho/Maven,
+  `linux/gtk/aarch64`) в момент сборки образа. Официальной Linux ARM64-сборки
+  Archi не существует — Eclipse p2-репозиторий уже содержит нужные SWT/GTK
+  фрагменты, апстрим их просто никогда не запрашивал. Патч, добавляющий этот
+  target, аддитивный и лежит в `docker/patches/`.
+
+### Сборка и публикация образа
+
+CI не используется для автосборки на каждый коммит — публикация ручная, по
+выходу новой версии Archi:
 
 ```bash
 cd docker
@@ -221,7 +255,156 @@ docker buildx build \
 
 `ARCHI_VERSION` можно передать явно через `--build-arg ARCHI_VERSION=5.9.0`,
 по умолчанию резолвится `latest` через GitHub Releases API в момент сборки.
+Перед релизом полезно прогнать `docker/smoke-test.sh` — регрессионные
+проверки `generate.sh`/вебхука/Caddy на host-платформе.
 
-## Подробности реализации
+### Лицензия
 
-Вся история решений, спайков и milestone-результатов — в [CLAUDE.md](CLAUDE.md).
+[MIT](LICENSE). Сам образ включает [Archi](https://www.archimatetool.com/)
+(Eclipse Public License 2.0) и плагин [coArchi](https://www.archimatetool.com/plugins/)
+(собственная лицензия archimatetool.com) — они скачиваются/собираются на
+этапе `docker build`, а не распространяются как часть исходников этого
+репозитория.
+
+---
+
+<a id="english"></a>
+## English
+
+A Docker image that clones a git repository containing an ArchiMate model
+(a single `*.archimate` file **or** a [coArchi](https://www.archimatetool.com/plugins/)
+repository, format auto-detected), runs it through the official
+[Archi CLI](https://github.com/archimatetool/archi/wiki/Archi-Command-Line-Interface)
+to generate an HTML report, and serves it as static files via
+[Caddy](https://caddyserver.com/). Accepts a webhook from GitHub/GitLab/anything
+generic to regenerate the report on push.
+
+### Why this might be useful
+
+- **Model format is auto-detected.** A single `.archimate` file or a coArchi
+  repository (the git-native model format, one file per element) — no manual
+  configuration needed in the common case.
+- **Honest multi-arch.** `linux/amd64` uses the official Archi build;
+  `linux/arm64` builds Archi **natively from source** (Tycho/Maven,
+  `linux/gtk/aarch64`) at `docker buildx build` time. No QEMU/box64 at
+  container runtime — both architectures run on native silicon.
+- **RU/EN + light/dark report theme out of the box** (`USE_MODERN_CSS`, on by
+  default) — language/theme toggle right in the report, Markdown rendering
+  for element documentation, better panel proportions. Prefer stock Archi
+  styling? One flag turns it all off.
+- **Debounced webhook.** `github`/`gitlab`/`generic` signature schemes, a
+  single-slot queue — concurrent pushes never race two generations against
+  each other.
+- **Atomic publishing.** The report is never served half-generated —
+  validation (non-empty `index.html`, see
+  [archi#980](https://github.com/archimatetool/archi/issues/980)) and the
+  swap happen before the served directory's contents change.
+- **No surprises at startup.** Healthcheck, git operation timeouts/retries,
+  and clear fail-fast configuration errors instead of a silently broken
+  service.
+
+### Quick start
+
+```bash
+docker run -d \
+  --name archimate-report \
+  -p 3000:3000 \
+  -e GIT_URL=https://github.com/your-org/your-model-repo.git \
+  -e GIT_TOKEN=ghp_xxx \
+  umkabeaf/archimate-report:latest
+```
+
+The report is available at `http://localhost:3000` a few seconds after start
+(the first generation runs synchronously before the web server comes up).
+
+### Environment variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `GIT_URL` | yes | Repository URL (`https://` or `git@...`) |
+| `GIT_REF` | no | branch/tag/commit, defaults to the default branch's HEAD |
+| `MODEL_PATH` | no | path to the `.archimate` file or coArchi repo root, if auto-detection is ambiguous |
+| `MODEL_FORMAT` | no | `auto` (default) / `plain` / `coarchi` |
+| `GIT_TOKEN` | no* | HTTPS token (PAT) |
+| `GIT_USERNAME` / `GIT_PASSWORD` | no* | login+password for HTTPS |
+| `GIT_SSH_PRIVATE_KEY` | no* | private SSH key (PEM or base64) |
+| `GIT_SSH_KNOWN_HOSTS` | no | known_hosts content; without it — TOFU (`accept-new`) |
+| `WEBHOOK_SECRET` | no | if set, enables `/webhook` |
+| `WEBHOOK_PROVIDER` | no** | `github` / `gitlab` / `generic` — required if `WEBHOOK_SECRET` is set |
+| `WEBHOOK_PATH` | no | endpoint path, defaults to `/webhook` |
+| `PORT` | no | serving port, defaults to `3000` |
+| `REGENERATE_ON_START` | no | `true` (default) / `false` |
+| `GENERATION_TIMEOUT` | no | timeout for a single generation run, seconds (default `600`) |
+| `USE_MODERN_CSS` | no | `true` (default) / `false` — RU/EN + light/dark report theme layered on Archi's stock look |
+| `TZ` | no | container timezone |
+
+`*` — exactly one git auth method (or none, for public repositories).
+`**` — required only together with `WEBHOOK_SECRET`.
+
+`GET /status` (same port as the report) returns JSON
+`{generating, last_run_at, last_success, last_error}` — used as the container
+healthcheck.
+
+### Webhook
+
+Without `WEBHOOK_SECRET`, the `/webhook` endpoint isn't registered at all
+(returns 404) — a safe default, nothing is enabled implicitly. If
+`WEBHOOK_SECRET` is set, `WEBHOOK_PROVIDER` is required — the container fails
+at startup with a clear error if it's missing or invalid.
+
+| `WEBHOOK_PROVIDER` | Verification | Header/parameter |
+|---|---|---|
+| `github` | HMAC-SHA256 of the request body, keyed with `WEBHOOK_SECRET` | `X-Hub-Signature-256: sha256=<hex>` |
+| `gitlab` | Direct constant-time comparison with `WEBHOOK_SECRET` | `X-Gitlab-Token: <secret>` |
+| `generic` | Direct constant-time comparison with `WEBHOOK_SECRET` | `X-Webhook-Secret: <secret>` header or `?secret=<secret>` query param |
+
+The endpoint path is configurable via `WEBHOOK_PATH` (default `/webhook`). A
+successful request immediately returns `202 Accepted` — generation runs
+asynchronously. Check progress/result via `GET /status`. A single-slot
+debounce queue means concurrent pushes never race two `git clone`/Archi CLI
+runs against each other.
+
+### Volumes
+
+Three working directories; none are declared as `VOLUME` in the image —
+without explicit mounting they're ordinary container layers that don't
+survive `docker rm`:
+
+| Path | Purpose | Mount it? |
+|---|---|---|
+| `/data/report` | Finished HTML report, served by Caddy | Yes, if you want the report to survive container recreation — especially with `REGENERATE_ON_START=false` |
+| `/data/repo` | Working copy of the model's git repository | Optional — speeds up subsequent runs (`git fetch` instead of a full `clone`) |
+| `/data/secrets` | Temporary auth material, `600` perms | No — recreated from env vars on every run |
+
+### Architectures
+
+- `linux/amd64` — official Archi build (`Archi-Linux64-*.tgz`).
+- `linux/arm64` — Archi built natively from source (Tycho/Maven,
+  `linux/gtk/aarch64`) at image build time. No official Linux ARM64 build of
+  Archi exists — the Eclipse p2 repository already ships the needed SWT/GTK
+  fragments, upstream just never requested that target. The additive patch
+  lives in `docker/patches/`.
+
+### Building and publishing the image
+
+No CI auto-builds on every commit — publishing is manual, triggered by a new
+Archi release:
+
+```bash
+cd docker
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -t umkabeaf/archimate-report:<ARCHI_VERSION> \
+  -t umkabeaf/archimate-report:latest \
+  --push .
+```
+
+Run `docker/smoke-test.sh` before a release — regression checks for
+`generate.sh`/webhook/Caddy on the host platform.
+
+### License
+
+[MIT](LICENSE). The image itself bundles [Archi](https://www.archimatetool.com/)
+(Eclipse Public License 2.0) and the [coArchi](https://www.archimatetool.com/plugins/)
+plugin (archimatetool.com's own license) — downloaded/built at `docker build`
+time, not distributed as part of this repository's source.
