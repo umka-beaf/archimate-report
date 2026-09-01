@@ -8,6 +8,15 @@
 </p>
 
 <p align="center">
+  🥧 <b>Killer-фича: Archi наконец-то запускается на Raspberry Pi.</b><br>
+  Никакой официальной Linux ARM64-сборки Archi не существует — мы собираем её
+  <b>нативно из исходников</b>, без box64/QEMU в рантайме.<br>
+  🥧 <b>Killer feature: Archi finally runs on a Raspberry Pi.</b><br>
+  There's no official Linux ARM64 build of Archi — we build one <b>natively
+  from source</b>, no box64/QEMU at runtime.
+</p>
+
+<p align="center">
   <a href="https://hub.docker.com/r/umkabeaf/archimate-report"><img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/umkabeaf/archimate-report"></a>
   <a href="https://hub.docker.com/r/umkabeaf/archimate-report"><img alt="Docker Image Size" src="https://img.shields.io/docker/image-size/umkabeaf/archimate-report/latest"></a>
   <img alt="Platforms" src="https://img.shields.io/badge/platform-linux%2Famd64%20%7C%20linux%2Farm64-informational">
@@ -43,13 +52,16 @@ RU+EN):
 
 ### ✨ Почему это может быть полезно
 
+- **🥧 Archi на Raspberry Pi — наконец-то.** Официальной Linux ARM64-сборки
+  Archi не существует, а эмуляция x86_64-версии через box64 упирается в
+  открытый баг апстрима (JVM/SWT/GTK3, зависание или SIGBUS) — поэтому мы
+  собираем Archi **нативно из исходников** под `linux/gtk/aarch64`
+  (Tycho/Maven) прямо на этапе `docker buildx build`. Никакого QEMU/box64 в
+  рантайме — на Pi 5 отчёт генерируется на «своём» железе, побайтово
+  идентичный amd64-версии. Подробности — [docs/PATCHES.md](docs/PATCHES.md).
 - **Формат модели определяется сам.** Одиночный `.archimate`-файл или
   coArchi-репозиторий (git-native формат модели, по файлу на элемент) — не
   нужно ничего настраивать вручную в типичном случае.
-- **Честный multi-arch.** `linux/amd64` — официальная сборка Archi;
-  `linux/arm64` — Archi собран **нативно из исходников** (Tycho/Maven,
-  `linux/gtk/aarch64`) на этапе `docker buildx build`. Никакого QEMU/box64 в
-  рантайме контейнера — обе архитектуры работают на «своём» железе.
 - **RU/EN + light/dark тема отчёта из коробки** (`USE_MODERN_CSS`, включена
   по умолчанию) — переключатель языка/темы прямо в отчёте, рендеринг
   Markdown в документации элементов, более удобные пропорции панелей.
@@ -335,13 +347,16 @@ Deeper topics live in their own docs (all bilingual, RU+EN):
 
 ### ✨ Why this might be useful
 
+- **🥧 Archi on a Raspberry Pi — finally.** There's no official Linux ARM64
+  build of Archi, and emulating the x86_64 build via box64 runs into an open
+  upstream bug (JVM/SWT/GTK3 — hangs or SIGBUSes) — so we build Archi
+  **natively from source** for `linux/gtk/aarch64` (Tycho/Maven) right at
+  `docker buildx build` time. No QEMU/box64 at runtime — on a Pi 5, the
+  report is generated on native silicon, byte-identical to the amd64 output.
+  Details in [docs/PATCHES.md](docs/PATCHES.md).
 - **Model format is auto-detected.** A single `.archimate` file or a coArchi
   repository (the git-native model format, one file per element) — no manual
   configuration needed in the common case.
-- **Honest multi-arch.** `linux/amd64` uses the official Archi build;
-  `linux/arm64` builds Archi **natively from source** (Tycho/Maven,
-  `linux/gtk/aarch64`) at `docker buildx build` time. No QEMU/box64 at
-  container runtime — both architectures run on native silicon.
 - **RU/EN + light/dark report theme out of the box** (`USE_MODERN_CSS`, on by
   default) — language/theme toggle right in the report, Markdown rendering
   for element documentation, better panel proportions. Prefer stock Archi

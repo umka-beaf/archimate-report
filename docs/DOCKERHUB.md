@@ -8,6 +8,11 @@ HTML-отчёт через Archi CLI и раздаёт его статикой. 
 архитектуры собраны нативно (arm64 — из исходников Archi, никакой эмуляции в
 рантайме).
 
+🥧 **Killer-фича: Archi наконец-то запускается на Raspberry Pi** — официальной
+Linux ARM64-сборки не существует, мы собираем её нативно из исходников.
+🥧 **Killer feature: Archi finally runs on a Raspberry Pi** — no official
+Linux ARM64 build exists, so we build one natively from source.
+
 ---
 
 ## Русский
