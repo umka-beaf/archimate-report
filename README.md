@@ -1,4 +1,6 @@
-# archimate-report
+<p align="center">
+  <img src="assets/logo.svg" alt="archimate-report" width="480">
+</p>
 
 <p align="center">
   <b>Один <code>docker run</code> — и ваша ArchiMate-модель из git превращается в живой,<br>
@@ -26,7 +28,14 @@ Docker-образ, который клонирует git-репозиторий 
 и раздаёт его статикой через [Caddy](https://caddyserver.com/). По вебхуку от
 GitHub/GitLab/чего угодно — перегенерирует отчёт при пуше в репозиторий модели.
 
-### Почему это может быть полезно
+Этот README покрывает основной контракт (env-переменные, вебхук, тома,
+compose). Более глубокие темы вынесены в отдельные доки: 🐳 [docs/CADDY.md](docs/CADDY.md)
+— как устроен единственный публичный процесс (раздача отчёта + reverse proxy
+на вебхук, TLS-терминация снаружи, почему публикация атомарна); 🎨 [docs/THEMING.md](docs/THEMING.md)
+— как устроена RU/EN + light/dark тема отчёта (`USE_MODERN_CSS`) и как её
+кастомизировать.
+
+### ✨ Почему это может быть полезно
 
 - **Формат модели определяется сам.** Одиночный `.archimate`-файл или
   coArchi-репозиторий (git-native формат модели, по файлу на элемент) — не
@@ -48,7 +57,7 @@ GitHub/GitLab/чего угодно — перегенерирует отчёт 
 - **Без сюрпризов на старте.** Healthcheck, таймауты и ретраи git-операций,
   понятные fail-fast ошибки конфигурации вместо тихо-неработающего сервиса.
 
-### Быстрый старт
+### 🚀 Быстрый старт
 
 ```bash
 docker run -d \
@@ -230,7 +239,7 @@ docker network create common
 в отдельном compose-стеке. Если такого прокси нет — уберите `x-network`/
 `networks` и раскомментируйте `ports: - 3000:3000`.
 
-### Архитектуры
+### 🏗️ Архитектуры
 
 - `linux/amd64` — официальная сборка Archi (`Archi-Linux64-*.tgz`).
 - `linux/arm64` — Archi собран нативно из исходников (Tycho/Maven,
@@ -239,7 +248,7 @@ docker network create common
   фрагменты, апстрим их просто никогда не запрашивал. Патч, добавляющий этот
   target, аддитивный и лежит в `docker/patches/`.
 
-### Проверка перед релизом (`docker/smoke-test.sh`)
+### ✅ Проверка перед релизом (`docker/smoke-test.sh`)
 
 Т.к. CI не пересобирает образ на каждый коммит (см. ниже), перед ручным
 релизом стоит прогнать `docker/smoke-test.sh` — он собирает образ **только
@@ -264,7 +273,7 @@ SKIP_BUILD=1 IMAGE=archi-report:m5 ./docker/smoke-test.sh   # переиспол
 можно переходить к реальной multi-arch сборке и `--push`; ненулевой код —
 читать лог над упавшей проверкой и не публиковать образ.
 
-### Сборка и публикация образа
+### 📦 Сборка и публикация образа
 
 CI не используется для автосборки на каждый коммит — публикация ручная, по
 выходу новой версии Archi:
@@ -285,7 +294,7 @@ docker buildx build \
 см. `.github/workflows/docker-publish.yml` (`workflow_dispatch`, без
 автозапуска на каждый push).
 
-### Лицензия
+### 📄 Лицензия
 
 [MIT](LICENSE). Сам образ включает [Archi](https://www.archimatetool.com/)
 (Eclipse Public License 2.0) и плагин [coArchi](https://www.archimatetool.com/plugins/)
@@ -306,7 +315,14 @@ to generate an HTML report, and serves it as static files via
 [Caddy](https://caddyserver.com/). Accepts a webhook from GitHub/GitLab/anything
 generic to regenerate the report on push.
 
-### Why this might be useful
+This README covers the core contract (env vars, webhook, volumes, compose).
+Deeper topics live in their own docs: 🐳 [docs/CADDY.md](docs/CADDY.md) — how
+the single public-facing process is set up (serving the report + reverse
+proxy to the webhook, TLS termination left to you, why publishing is atomic);
+🎨 [docs/THEMING.md](docs/THEMING.md) — how the RU/EN + light/dark report
+theme (`USE_MODERN_CSS`) works and how to customize it.
+
+### ✨ Why this might be useful
 
 - **Model format is auto-detected.** A single `.archimate` file or a coArchi
   repository (the git-native model format, one file per element) — no manual
@@ -330,7 +346,7 @@ generic to regenerate the report on push.
   and clear fail-fast configuration errors instead of a silently broken
   service.
 
-### Quick start
+### 🚀 Quick start
 
 ```bash
 docker run -d \
@@ -403,7 +419,7 @@ survive `docker rm`:
 | `/data/repo` | Working copy of the model's git repository | Optional — speeds up subsequent runs (`git fetch` instead of a full `clone`) |
 | `/data/secrets` | Temporary auth material, `600` perms | No — recreated from env vars on every run |
 
-### Architectures
+### 🏗️ Architectures
 
 - `linux/amd64` — official Archi build (`Archi-Linux64-*.tgz`).
 - `linux/arm64` — Archi built natively from source (Tycho/Maven,
@@ -412,7 +428,7 @@ survive `docker rm`:
   fragments, upstream just never requested that target. The additive patch
   lives in `docker/patches/`.
 
-### Pre-release checks (`docker/smoke-test.sh`)
+### ✅ Pre-release checks (`docker/smoke-test.sh`)
 
 Since CI doesn't rebuild the image on every commit (see below), run
 `docker/smoke-test.sh` before a manual release. It builds the image for the
@@ -437,7 +453,7 @@ automatically (`trap cleanup EXIT`) regardless of outcome. Exit 0 means it's
 safe to move on to the real multi-arch build and `--push`; a non-zero exit
 means read the log above the failing check and don't publish the image.
 
-### Building and publishing the image
+### 📦 Building and publishing the image
 
 No CI auto-builds on every commit — publishing is manual, triggered by a new
 Archi release:
@@ -459,7 +475,7 @@ The same multi-arch build+push can also be run manually from GitHub Actions
 — see `.github/workflows/docker-publish.yml` (`workflow_dispatch`, no
 auto-trigger on every push).
 
-### License
+### 📄 License
 
 [MIT](LICENSE). The image itself bundles [Archi](https://www.archimatetool.com/)
 (Eclipse Public License 2.0) and the [coArchi](https://www.archimatetool.com/plugins/)

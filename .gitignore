@@ -7,5 +7,10 @@
 # whole directory is untracked and stays local-only).
 /spikes/
 
+# Internal working notes/decision log — never meant for any remote either,
+# public or private. Kept as a local-only file (see docs/ for what actually
+# ships in git).
+/CLAUDE.md
+
 # Misc
 .DS_Store
