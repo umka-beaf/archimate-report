@@ -19,6 +19,7 @@
 <p align="center">
   <a href="https://hub.docker.com/r/umkabeaf/archimate-report"><img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/umkabeaf/archimate-report"></a>
   <a href="https://hub.docker.com/r/umkabeaf/archimate-report"><img alt="Docker Image Size" src="https://img.shields.io/docker/image-size/umkabeaf/archimate-report/latest"></a>
+  <a href="https://github.com/umka-beaf/archimate-report/pkgs/container/archimate-report"><img alt="GHCR mirror" src="https://img.shields.io/badge/ghcr.io-mirror-blue?logo=github"></a>
   <img alt="Platforms" src="https://img.shields.io/badge/platform-linux%2Famd64%20%7C%20linux%2Farm64-informational">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green"></a>
 </p>
@@ -104,6 +105,11 @@ docker run -d \
   -e GIT_TOKEN=ghp_xxx \
   umkabeaf/archimate-report:latest
 ```
+
+Тот же образ зеркалируется на GHCR — `ghcr.io/umka-beaf/archimate-report`
+(теги всегда синхронны с Docker Hub, см. «Сборка и публикация образа» ниже);
+подставьте этот адрес вместо `umkabeaf/archimate-report:latest`, если
+предпочитаете тянуть образы с ghcr.io.
 
 Отчёт будет доступен на `http://localhost:3000` через несколько секунд после
 старта (первая генерация выполняется синхронно перед запуском веб-сервера).
@@ -339,7 +345,13 @@ docker buildx build \
 
 Тот же multi-arch build+push можно запустить и вручную из GitHub Actions —
 см. `.github/workflows/docker-publish.yml` (`workflow_dispatch`, без
-автозапуска на каждый push).
+автозапуска на каждый push). В CI сборка разбита на отдельные job'ы —
+`linux/amd64` собирается на обычном раннере, `linux/arm64` — на нативном
+`ubuntu-24.04-arm` (без QEMU-эмуляции, значительно быстрее, чем эмулировать
+Tycho/Maven-сборку под amd64-раннером), затем отдельный job склеивает оба
+digest'а в единый manifest list и публикует его и на Docker Hub, и
+зеркалом на GHCR (`ghcr.io/umka-beaf/archimate-report`) — тегами, идентичными
+Docker Hub, через `docker buildx imagetools create`, без повторной сборки.
 
 Тот же `workflow_dispatch`-запуск (когда `push` не выключен явно) заодно
 публикует `docs/DOCKERHUB.md` как длинное описание репозитория на странице
@@ -437,6 +449,11 @@ docker run -d \
   -e GIT_TOKEN=ghp_xxx \
   umkabeaf/archimate-report:latest
 ```
+
+The same image is mirrored to GHCR —
+`ghcr.io/umka-beaf/archimate-report` (tags always match Docker Hub, see
+"Building and publishing the image" below); substitute that address for
+`umkabeaf/archimate-report:latest` if you'd rather pull from ghcr.io.
 
 The report is available at `http://localhost:3000` a few seconds after start
 (the first generation runs synchronously before the web server comes up).
@@ -563,7 +580,13 @@ Releases API at build time.
 
 The same multi-arch build+push can also be run manually from GitHub Actions
 — see `.github/workflows/docker-publish.yml` (`workflow_dispatch`, no
-auto-trigger on every push).
+auto-trigger on every push). CI splits the build into separate jobs —
+`linux/amd64` builds on a regular runner, `linux/arm64` on a native
+`ubuntu-24.04-arm` runner (no QEMU emulation, much faster than emulating the
+Tycho/Maven build under an amd64 runner) — then a merge job assembles both
+digests into one manifest list and publishes it to both Docker Hub and, as a
+mirror, GHCR (`ghcr.io/umka-beaf/archimate-report`) with tags identical to
+Docker Hub, via `docker buildx imagetools create`, with no rebuild.
 
 The same `workflow_dispatch` run (as long as `push` isn't explicitly disabled)
 also publishes `docs/DOCKERHUB.md` as the repository's long description on the

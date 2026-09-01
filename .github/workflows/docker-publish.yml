@@ -15,7 +15,7 @@ on:
         required: false
         type: string
       push:
-        description: Push the built image to Docker Hub
+        description: Push the built image to Docker Hub and GHCR
         required: false
         type: boolean
         default: true
@@ -23,22 +23,53 @@ on:
     types: [published]
 
 jobs:
-  build-and-push:
+  # Resolves the version tag once so both matrix legs (amd64/arm64) and the
+  # merge job agree on the same value, instead of each re-resolving "latest"
+  # independently and risking a mismatch if a new Archi release lands mid-run.
+  version:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - name: Resolve version
+        id: resolve
+        run: |
+          VERSION="${{ github.event.inputs.archi_version }}"
+          if [ -z "$VERSION" ] && [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+            VERSION="${VERSION#v}"
+          fi
+          if [ -z "$VERSION" ]; then
+            VERSION="$(curl -fsS https://api.github.com/repos/archimatetool/archi.io/releases/latest \
+              | grep -m1 '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  # Built per-platform on the runner best suited for it: amd64 on the regular
+  # (free) ubuntu-latest, arm64 on GitHub's native ubuntu-24.04-arm runner
+  # (also free for public repos) — no QEMU. The previous single-job,
+  # single-step `docker buildx build --platform linux/amd64,linux/arm64`
+  # emulated the arm64 leg's Tycho/Maven build under QEMU on an amd64 runner,
+  # which alone took ~24 minutes (see run 33562262412, step "Build and push":
+  # 1422s) vs. the ~7-11 min a native arm64 build takes per CLAUDE.md history.
+  # Each leg pushes its image *by digest* only (no tags yet, no manifest
+  # list) — the merge job below is what actually creates the multi-arch tags.
+  build:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     env:
-      # No project-specific default here on purpose — a fork publishing its
-      # own copy under a different Docker Hub account/org only needs to set
-      # the DOCKERHUB_NAMESPACE repository variable (Settings -> Secrets and
-      # variables -> Actions -> Variables), not edit this workflow file.
-      # Falls back to the Docker Hub login username, which is the correct
-      # namespace for any personal (non-org) account.
       DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || secrets.DOCKERHUB_USERNAME }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -49,58 +80,120 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Resolve version tag and build args
-        id: version
-        run: |
-          VERSION="${{ github.event.inputs.archi_version }}"
-          if [ -z "$VERSION" ] && [ "${{ github.event_name }}" = "release" ]; then
-            VERSION="${{ github.event.release.tag_name }}"
-            VERSION="${VERSION#v}"
-          fi
-
-          TAGS="${DOCKERHUB_NAMESPACE}/archimate-report:latest"
-          BUILD_ARGS=""
-          if [ -n "$VERSION" ]; then
-            TAGS="$TAGS
-          ${DOCKERHUB_NAMESPACE}/archimate-report:$VERSION"
-            BUILD_ARGS="ARCHI_VERSION=$VERSION"
-          fi
-
-          {
-            echo "tags<<EOF"
-            echo "$TAGS"
-            echo "EOF"
-            echo "build_args<<EOF"
-            echo "$BUILD_ARGS"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Build and push
+      - name: Build and push by digest
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           push: ${{ github.event.inputs.push != 'false' }}
-          build-args: ${{ steps.version.outputs.build_args }}
-          tags: ${{ steps.version.outputs.tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          build-args: ARCHI_VERSION=${{ needs.version.outputs.version }}
+          # No tags on purpose — this leg only produces a single-platform
+          # image identified by digest. The merge job below is what
+          # assembles the real :<version>/:latest tags across both digests.
+          outputs: type=image,name=docker.io/${{ env.DOCKERHUB_NAMESPACE }}/archimate-report,push-by-digest=true,name-canonical=true,push=${{ github.event.inputs.push != 'false' }}
+          cache-from: type=gha,scope=${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
+
+      - name: Export digest
+        if: ${{ github.event.inputs.push != 'false' }}
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        if: ${{ github.event.inputs.push != 'false' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # Assembles the two single-platform digests into one real multi-arch
+  # manifest list under the actual :<version>/:latest tags on Docker Hub,
+  # then mirrors that finished image into GHCR under identical tags (via a
+  # second imagetools call reading from Docker Hub, not by rebuilding) —
+  # this is what keeps GHCR tags byte-for-byte synced with Docker Hub, and
+  # it's a plain registry-to-registry copy, so it's fast regardless of how
+  # long the underlying platform builds took.
+  merge:
+    needs: [version, build]
+    if: ${{ github.event.inputs.push != 'false' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || secrets.DOCKERHUB_USERNAME }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push Docker Hub manifest list
+        working-directory: /tmp/digests
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          REPO="docker.io/${DOCKERHUB_NAMESPACE}/archimate-report"
+          TAG_ARGS="-t ${REPO}:latest"
+          if [ -n "$VERSION" ]; then
+            TAG_ARGS="$TAG_ARGS -t ${REPO}:${VERSION}"
+          fi
+          # shellcheck disable=SC2046
+          docker buildx imagetools create $TAG_ARGS \
+            $(printf "${REPO}@sha256:%s " *)
+
+      - name: Mirror to GHCR
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          SRC="docker.io/${DOCKERHUB_NAMESPACE}/archimate-report:latest"
+          DEST="ghcr.io/${{ github.repository_owner }}/archimate-report"
+          TAG_ARGS="-t ${DEST}:latest"
+          if [ -n "$VERSION" ]; then
+            TAG_ARGS="$TAG_ARGS -t ${DEST}:${VERSION}"
+          fi
+          # Copies the just-published Docker Hub manifest list straight into
+          # GHCR by digest — no rebuild, guarantees the two registries carry
+          # byte-identical images under matching tags.
+          docker buildx imagetools create $TAG_ARGS "$SRC"
 
       # Same manual trigger that publishes the image also syncs the Docker
       # Hub repo page's long description from docs/DOCKERHUB.md - one button
       # covers both instead of remembering to separately run
       # docker/publish-dockerhub-readme.sh by hand with a locally-exported
-      # PAT. Skipped on dry runs (push=false) since there's nothing new to
-      # describe if the image itself wasn't published. Reuses the same
-      # DOCKERHUB_USERNAME/DOCKERHUB_TOKEN secrets as the login step above.
+      # PAT. Reuses the same DOCKERHUB_USERNAME/DOCKERHUB_TOKEN secrets as the
+      # login step above.
       - name: Publish Docker Hub README
-        if: ${{ github.event.inputs.push != 'false' }}
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-          # Kept in sync with the build step's tags above, in case they ever
-          # diverge (e.g. publishing under an org whose name differs from the
-          # login username).
+          # Kept in sync with the tags above, in case they ever diverge (e.g.
+          # publishing under an org whose name differs from the login
+          # username).
           DOCKERHUB_NAMESPACE: ${{ env.DOCKERHUB_NAMESPACE }}
         run: ./docker/publish-dockerhub-readme.sh
