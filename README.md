@@ -17,6 +17,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/umka-beaf/archimate-report/actions/workflows/docker-publish.yml"><img alt="Build" src="https://github.com/umka-beaf/archimate-report/actions/workflows/docker-publish.yml/badge.svg"></a>
   <a href="https://hub.docker.com/r/umkabeaf/archimate-report"><img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/umkabeaf/archimate-report"></a>
   <a href="https://hub.docker.com/r/umkabeaf/archimate-report"><img alt="Docker Image Size" src="https://img.shields.io/docker/image-size/umkabeaf/archimate-report/latest"></a>
   <a href="https://github.com/umka-beaf/archimate-report/pkgs/container/archimate-report"><img alt="GHCR mirror" src="https://img.shields.io/badge/ghcr.io-mirror-blue?logo=github"></a>
