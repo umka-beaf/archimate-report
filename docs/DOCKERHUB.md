@@ -2,6 +2,8 @@
 
 🇷🇺 [Русский](#русский) · 🇬🇧 [English](#english)
 
+📦 Source / Исходники: [github.com/umka-beaf/archimate-report](https://github.com/umka-beaf/archimate-report)
+
 Docker-образ, который клонирует git-репозиторий с ArchiMate-моделью, генерирует
 HTML-отчёт через Archi CLI и раздаёт его статикой. Поддерживает вебхук для
 перегенерации по пушу. Multi-arch: `linux/amd64` + `linux/arm64` — обе
