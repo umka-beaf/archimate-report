@@ -48,7 +48,7 @@ CONTAINERS=()
 cleanup() {
     local c
     for c in "${CONTAINERS[@]:-}"; do
-        [ -n "$c" ] && docker rm -f "$c" > /dev/null 2>&1 || true
+        if [ -n "$c" ]; then docker rm -f "$c" > /dev/null 2>&1 || true; fi
     done
 }
 trap cleanup EXIT
