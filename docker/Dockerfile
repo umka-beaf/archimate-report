@@ -39,19 +39,24 @@ RUN set -eux; \
     if [ "$ARCHI_VERSION" = "latest" ]; then \
         LATEST_JSON=$(curl -fsSL https://api.github.com/repos/archimatetool/archi.io/releases/latest); \
         ARCHI_VERSION=$(printf '%s' "$LATEST_JSON" | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/'); \
-        # archi.io release tags switched to underscores (e.g. "5_9_0") at some
-        # point after this project's earlier releases, which used dotted tags
-        # matching the asset filename. Normalize back to dots so ARCHI_VERSION
-        # (used below for both the tag path fallback and the persisted
-        # .archi_version file) stays in the dotted form the rest of this
-        # project/README/CLAUDE.md assumes.
+        # archi.io has flip-flopped release *tag* conventions across releases
+        # - dotted (e.g. "5.10.0") on some, underscored (e.g. "5_9_0") on
+        # others - while the asset *filename* has always stayed dotted (e.g.
+        # "Archi-Linux64-5.10.0.tgz"). Normalize to dots here so ARCHI_VERSION
+        # (used below for the persisted .archi_version file, the filename,
+        # and as the first tag-path attempt) stays in the dotted form the
+        # rest of this project/README/CLAUDE.md assumes; the actual tag path
+        # is resolved by trying both conventions below rather than assuming
+        # one, since archi.io has changed this convention before without
+        # warning (see docs/PATCHES.md / CLAUDE.md release notes).
         ARCHI_VERSION=$(printf '%s' "$ARCHI_VERSION" | tr '_' '.'); \
     fi; \
     echo "Resolved ARCHI_VERSION=${ARCHI_VERSION}"; \
-    # The release *tag* uses underscores (e.g. "5_9_0") but the asset
-    # *filename* still uses dots (e.g. "Archi-Linux64-5.9.0.tgz") - confirmed
-    # against the actual archi.io releases page, not just the API response.
+    # Try the dotted tag first, fall back to the underscored form if that
+    # 404s - see the tag-convention note above.
     curl -fsSL -o /tmp/archi.tgz \
+      "https://github.com/archimatetool/archi.io/releases/download/${ARCHI_VERSION}/Archi-Linux64-${ARCHI_VERSION}.tgz" \
+      || curl -fsSL -o /tmp/archi.tgz \
       "https://github.com/archimatetool/archi.io/releases/download/$(printf '%s' "$ARCHI_VERSION" | tr '.' '_')/Archi-Linux64-${ARCHI_VERSION}.tgz"; \
     mkdir -p /opt/archi; \
     tar -xzf /tmp/archi.tgz -C /opt/archi --strip-components=1; \
