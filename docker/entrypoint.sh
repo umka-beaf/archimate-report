@@ -10,6 +10,8 @@ log() { printf '%s [entrypoint] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2;
 
 # shellcheck source=docker/lib/model-config.sh
 source /usr/local/lib/model-config.sh
+# shellcheck source=docker/lib/report-stub.sh
+source /usr/local/lib/report-stub.sh
 
 REGENERATE_ON_START="${REGENERATE_ON_START:-true}"
 
@@ -49,16 +51,37 @@ if [ "${#MODEL_INDICES[@]}" -eq 0 ]; then
 else
     [ -z "${GIT_URL:-}" ] || log "WARNING: GIT_URL is set but MODEL_<N>_SLUG vars were found — running in multi-model mode, bare GIT_URL is ignored (see CLAUDE.md §32.2)"
     log "multi-model mode: found ${#MODEL_INDICES[@]} model(s): ${MODEL_INDICES[*]}"
+
+    # Root landing page (§32.4) — deliberately overwritten unconditionally on
+    # every start: in multi-model mode /data/report itself is never a real
+    # report (generate.sh only ever writes into /data/report/<slug>/), so
+    # there's nothing of value to preserve here between restarts.
+    mc_publish_stub /data/report "ArchiMate Report Service" \
+        "<p>This instance serves multiple ArchiMate model reports, each published under its own path. Ask your administrator for the direct link to the report you need.</p>"
+
     for n in "${MODEL_INDICES[@]}"; do
         slug="$(mc_model_slug "$n")"
+        report_dir="/data/report/$slug"
+
+        # Give a stub page to anything hitting this model's path before its
+        # first successful generation exists — otherwise it's a bare Caddy
+        # 404 with no indication of whether the slug is wrong or generation
+        # just hasn't finished/succeeded yet. Only written when no report is
+        # present yet (e.g. a persisted /data/report volume from a previous
+        # run keeps its real report across restarts, stub or not).
+        if [ ! -f "$report_dir/index.html" ]; then
+            mc_publish_stub "$report_dir" "Report not yet available" \
+                "<p>This model's report has not been generated yet, or the last generation attempt failed. Check <code>docker logs</code> or <code>/status</code> for details.</p>"
+        fi
+
         log "running initial generation for model $n (slug: $slug)"
         # A single model failing to generate at startup must not take down
         # the whole container (§32.6) — the other models, if any, may still
         # be perfectly fine to serve. `if ! cmd; then ...; fi` is exempt from
         # `set -e`'s errexit (commands in an if/while/until condition never
         # trigger it), so this needs no extra `|| true` workaround.
-        if ! run_initial_generation "/data/report/$slug" "$n"; then
-            log "WARNING: initial generation for model $n (slug: $slug) failed — continuing with other models, see /data/report/$slug for its stub/previous state"
+        if ! run_initial_generation "$report_dir" "$n"; then
+            log "WARNING: initial generation for model $n (slug: $slug) failed — continuing with other models, see $report_dir for its stub/previous state"
         fi
     done
 fi

@@ -189,6 +189,9 @@ COPY docker/generate.sh /usr/local/bin/generate.sh
 # Sourced (not executed) by both entrypoint.sh and generate.sh, see
 # docker/lib/model-config.sh and CLAUDE.md §32 — no chmod +x needed.
 COPY docker/lib/model-config.sh /usr/local/lib/model-config.sh
+# Sourced by entrypoint.sh only (generate.sh never touches stub pages, see
+# CLAUDE.md §32.4) — no chmod +x needed.
+COPY docker/lib/report-stub.sh /usr/local/lib/report-stub.sh
 COPY docker/Caddyfile /etc/caddy/Caddyfile
 RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/generate.sh /usr/local/bin/archi-webhook
 
