@@ -4,14 +4,58 @@
 # light/dark theme and favicon (docker/report-theme/), then publishes the
 # result to /data/report. Invoked by entrypoint.sh on container start and by
 # archi-webhook on every accepted webhook request.
+#
+# Usage: generate.sh [MODEL_INDEX]
+#   No argument — legacy single-model mode: reads the bare GIT_URL/GIT_REF/
+#                 MODEL_PATH/MODEL_FORMAT/GENERATION_TIMEOUT/GIT_*(auth) vars,
+#                 publishes to /data/report with no slug subdirectory — byte-
+#                 for-byte the same behavior as before multi-model support
+#                 existed.
+#   MODEL_INDEX — multi-model mode (see CLAUDE.md §32): reads MODEL_<N>_*
+#                 vars instead, publishes under /data/{repo,report,secrets}/
+#                 <slug>. MODEL_INDEX must resolve to a known MODEL_<N>_SLUG
+#                 (see docker/lib/model-config.sh) — callers (entrypoint.sh,
+#                 archi-webhook) are expected to have already validated the
+#                 model list, so an unresolvable index here means a caller
+#                 bug, not a user config error.
 set -euo pipefail
+
+# shellcheck source=docker/lib/model-config.sh
+source /usr/local/lib/model-config.sh
 
 # Same timestamp format as entrypoint.sh and archi-webhook — see the comment
 # on entrypoint.sh's log() for why this isn't full structured/JSON logging.
-log() { printf '%s [generate] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2; }
+# GENERATE_LOG_TAG picks up the model's slug in multi-model mode (set below,
+# once MODEL_INDEX/SLUG are resolved) so interleaved output from the
+# sequential multi-model queue (§32.5) stays attributable per model.
+GENERATE_LOG_TAG="[generate]"
+log() { printf '%s %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$GENERATE_LOG_TAG" "$*" >&2; }
 die() {
     log "ERROR: $*"
     exit 1
+}
+
+MODEL_INDEX="${1:-}"
+SLUG=""
+if [ -n "$MODEL_INDEX" ]; then
+    [[ "$MODEL_INDEX" =~ ^[0-9]+$ ]] || die "invalid model index argument: $MODEL_INDEX"
+    SLUG="$(mc_model_slug "$MODEL_INDEX")"
+    [ -n "$SLUG" ] || die "no MODEL_${MODEL_INDEX}_SLUG found in environment (caller bug — model-config.sh should have validated this)"
+    GENERATE_LOG_TAG="[generate:$SLUG]"
+fi
+
+# Resolves <key> either from the per-model namespace (MODEL_<MODEL_INDEX>_<key>)
+# in multi-model mode, or from the legacy bare <key> variable otherwise —
+# every GIT_*/MODEL_*/GENERATION_TIMEOUT read below goes through this instead
+# of reading its variable directly.
+resolve_var() {
+    local key="$1" var
+    if [ -n "$MODEL_INDEX" ]; then
+        mc_model_var "$MODEL_INDEX" "$key"
+    else
+        var="$key"
+        printf '%s' "${!var:-}"
+    fi
 }
 
 # --- Bound the whole run (git clone/fetch + Archi CLI) by GENERATION_TIMEOUT
@@ -20,6 +64,7 @@ die() {
 # replaces the process image (no leftover subshell/trap weirdness) and env
 # vars (GIT_URL etc.) carry over untouched. SIGTERM first, SIGKILL 10s later
 # if the Archi CLI/xvfb doesn't exit cleanly. ---
+GENERATION_TIMEOUT="$(resolve_var GENERATION_TIMEOUT)"
 GENERATION_TIMEOUT="${GENERATION_TIMEOUT:-600}"
 if [ -z "${_GENERATE_SH_TIMEOUT_GUARD:-}" ]; then
     export _GENERATE_SH_TIMEOUT_GUARD=1
@@ -57,20 +102,47 @@ urlencode() {
     printf '%s' "$out"
 }
 
-: "${GIT_URL:?GIT_URL is required}"
-GIT_REF="${GIT_REF:-}"
-MODEL_PATH="${MODEL_PATH:-}"
+GIT_URL="$(resolve_var GIT_URL)"
+if [ -z "$GIT_URL" ]; then
+    if [ -n "$MODEL_INDEX" ]; then
+        die "MODEL_${MODEL_INDEX}_GIT_URL is required"
+    else
+        die "GIT_URL is required"
+    fi
+fi
+GIT_REF="$(resolve_var GIT_REF)"
+MODEL_PATH="$(resolve_var MODEL_PATH)"
+MODEL_FORMAT="$(resolve_var MODEL_FORMAT)"
 MODEL_FORMAT="${MODEL_FORMAT:-auto}"
-REPO_DIR="/data/repo"
-REPORT_DIR="/data/report"
+
+# Per-slug in multi-model mode, so each model gets its own working copy /
+# published report / secrets — REPORT_TMP_DIR stays shared/unqualified even
+# in multi-model mode, since the single global sequential worker (§32.5)
+# guarantees only one model is ever mid-generation at a time, so there's
+# never concurrent use of the scratch directory to worry about.
+if [ -n "$MODEL_INDEX" ]; then
+    REPO_DIR="/data/repo/$SLUG"
+    REPORT_DIR="/data/report/$SLUG"
+    SECRETS_DIR="/data/secrets/$SLUG"
+else
+    REPO_DIR="/data/repo"
+    REPORT_DIR="/data/report"
+    SECRETS_DIR="/data/secrets"
+fi
 REPORT_TMP_DIR="/data/report.new"
-SECRETS_DIR="/data/secrets"
 REPORT_THEME_DIR="/opt/report-theme"
 
 case "$MODEL_FORMAT" in
     auto | plain | coarchi) ;;
     *) die "MODEL_FORMAT must be one of: auto, plain, coarchi (got: $MODEL_FORMAT)" ;;
 esac
+
+# --- Resolve auth vars (per-model in multi-model mode) ---
+GIT_TOKEN="$(resolve_var GIT_TOKEN)"
+GIT_USERNAME="$(resolve_var GIT_USERNAME)"
+GIT_PASSWORD="$(resolve_var GIT_PASSWORD)"
+GIT_SSH_PRIVATE_KEY="$(resolve_var GIT_SSH_PRIVATE_KEY)"
+GIT_SSH_KNOWN_HOSTS="$(resolve_var GIT_SSH_KNOWN_HOSTS)"
 
 # --- Count how many auth methods were supplied; reject more than one ---
 AUTH_METHODS=0
