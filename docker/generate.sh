@@ -4,14 +4,54 @@
 # light/dark theme and favicon (docker/report-theme/), then publishes the
 # result to /data/report. Invoked by entrypoint.sh on container start and by
 # archi-webhook on every accepted webhook request.
+#
+# Usage: generate.sh [MODEL_INDEX]
+#   No argument — legacy single-model mode: reads the bare GIT_URL/GIT_REF/
+#                 MODEL_PATH/MODEL_FORMAT/GENERATION_TIMEOUT/GIT_*(auth) vars,
+#                 publishes to /data/report with no slug subdirectory — byte-
+#                 for-byte the same behavior as before multi-model support
+#                 existed.
+#   MODEL_INDEX — multi-model mode (see docs/MULTI_MODEL.md): reads MODEL_<N>_*
+#                 vars instead, publishes under /data/{repo,report,secrets}/
+#                 <slug>. MODEL_INDEX must resolve to a known MODEL_<N>_SLUG
+#                 (see docker/lib/model-config.sh) — callers (entrypoint.sh,
+#                 archi-webhook) are expected to have already validated the
+#                 model list, so an unresolvable index here means a caller
+#                 bug, not a user config error.
 set -euo pipefail
 
-# Same timestamp format as entrypoint.sh and archi-webhook — see the comment
-# on entrypoint.sh's log() for why this isn't full structured/JSON logging.
-log() { printf '%s [generate] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2; }
+LOG_COMPONENT="generate"
+# shellcheck source=docker/lib/log.sh
+source /usr/local/lib/log.sh
+# shellcheck source=docker/lib/model-config.sh
+source /usr/local/lib/model-config.sh
+
 die() {
-    log "ERROR: $*"
+    log_error "$*"
     exit 1
+}
+
+MODEL_INDEX="${1:-}"
+SLUG=""
+if [ -n "$MODEL_INDEX" ]; then
+    [[ "$MODEL_INDEX" =~ ^[0-9]+$ ]] || die "invalid model index argument: $MODEL_INDEX"
+    SLUG="$(mc_model_slug "$MODEL_INDEX")"
+    [ -n "$SLUG" ] || die "no MODEL_${MODEL_INDEX}_SLUG found in environment (caller bug — model-config.sh should have validated this)"
+    LOG_COMPONENT="generate:$SLUG"
+fi
+
+# Resolves <key> either from the per-model namespace (MODEL_<MODEL_INDEX>_<key>)
+# in multi-model mode, or from the legacy bare <key> variable otherwise —
+# every GIT_*/MODEL_*/GENERATION_TIMEOUT read below goes through this instead
+# of reading its variable directly.
+resolve_var() {
+    local key="$1" var
+    if [ -n "$MODEL_INDEX" ]; then
+        mc_model_var "$MODEL_INDEX" "$key"
+    else
+        var="$key"
+        printf '%s' "${!var:-}"
+    fi
 }
 
 # --- Bound the whole run (git clone/fetch + Archi CLI) by GENERATION_TIMEOUT
@@ -20,6 +60,7 @@ die() {
 # replaces the process image (no leftover subshell/trap weirdness) and env
 # vars (GIT_URL etc.) carry over untouched. SIGTERM first, SIGKILL 10s later
 # if the Archi CLI/xvfb doesn't exit cleanly. ---
+GENERATION_TIMEOUT="$(resolve_var GENERATION_TIMEOUT)"
 GENERATION_TIMEOUT="${GENERATION_TIMEOUT:-600}"
 if [ -z "${_GENERATE_SH_TIMEOUT_GUARD:-}" ]; then
     export _GENERATE_SH_TIMEOUT_GUARD=1
@@ -37,7 +78,7 @@ retry_cmd() {
         "$@" && return 0
         rc=$?
         [ "$attempt" -ge "$max_attempts" ] && return "$rc"
-        log "command failed (exit $rc, attempt $attempt/$max_attempts) — retrying in ${delay}s: $*"
+        log_warn "command failed (exit $rc, attempt $attempt/$max_attempts) — retrying in ${delay}s: $*"
         sleep "$delay"
         attempt=$((attempt + 1))
         delay=$((delay * 2))
@@ -57,20 +98,47 @@ urlencode() {
     printf '%s' "$out"
 }
 
-: "${GIT_URL:?GIT_URL is required}"
-GIT_REF="${GIT_REF:-}"
-MODEL_PATH="${MODEL_PATH:-}"
+GIT_URL="$(resolve_var GIT_URL)"
+if [ -z "$GIT_URL" ]; then
+    if [ -n "$MODEL_INDEX" ]; then
+        die "MODEL_${MODEL_INDEX}_GIT_URL is required"
+    else
+        die "GIT_URL is required"
+    fi
+fi
+GIT_REF="$(resolve_var GIT_REF)"
+MODEL_PATH="$(resolve_var MODEL_PATH)"
+MODEL_FORMAT="$(resolve_var MODEL_FORMAT)"
 MODEL_FORMAT="${MODEL_FORMAT:-auto}"
-REPO_DIR="/data/repo"
-REPORT_DIR="/data/report"
+
+# Per-slug in multi-model mode, so each model gets its own working copy /
+# published report / secrets — REPORT_TMP_DIR stays shared/unqualified even
+# in multi-model mode, since the single global sequential worker (§32.5)
+# guarantees only one model is ever mid-generation at a time, so there's
+# never concurrent use of the scratch directory to worry about.
+if [ -n "$MODEL_INDEX" ]; then
+    REPO_DIR="/data/repo/$SLUG"
+    REPORT_DIR="/data/report/$SLUG"
+    SECRETS_DIR="/data/secrets/$SLUG"
+else
+    REPO_DIR="/data/repo"
+    REPORT_DIR="/data/report"
+    SECRETS_DIR="/data/secrets"
+fi
 REPORT_TMP_DIR="/data/report.new"
-SECRETS_DIR="/data/secrets"
 REPORT_THEME_DIR="/opt/report-theme"
 
 case "$MODEL_FORMAT" in
     auto | plain | coarchi) ;;
     *) die "MODEL_FORMAT must be one of: auto, plain, coarchi (got: $MODEL_FORMAT)" ;;
 esac
+
+# --- Resolve auth vars (per-model in multi-model mode) ---
+GIT_TOKEN="$(resolve_var GIT_TOKEN)"
+GIT_USERNAME="$(resolve_var GIT_USERNAME)"
+GIT_PASSWORD="$(resolve_var GIT_PASSWORD)"
+GIT_SSH_PRIVATE_KEY="$(resolve_var GIT_SSH_PRIVATE_KEY)"
+GIT_SSH_KNOWN_HOSTS="$(resolve_var GIT_SSH_KNOWN_HOSTS)"
 
 # --- Count how many auth methods were supplied; reject more than one ---
 AUTH_METHODS=0
@@ -131,7 +199,7 @@ elif [ -n "${GIT_SSH_PRIVATE_KEY:-}" ]; then
         chmod 600 "$KNOWN_HOSTS_FILE"
         SSH_OPTS="$SSH_OPTS -o UserKnownHostsFile=$KNOWN_HOSTS_FILE -o StrictHostKeyChecking=yes"
     else
-        log "WARNING: GIT_SSH_KNOWN_HOSTS not set — using StrictHostKeyChecking=accept-new (TOFU, no pinned host key)"
+        log_warn "GIT_SSH_KNOWN_HOSTS not set — using StrictHostKeyChecking=accept-new (TOFU, no pinned host key)"
         SSH_OPTS="$SSH_OPTS -o UserKnownHostsFile=$SECRETS_DIR/known_hosts -o StrictHostKeyChecking=accept-new"
     fi
     export GIT_SSH_COMMAND="ssh $SSH_OPTS"
@@ -140,12 +208,12 @@ fi
 git config --global advice.detachedHead false
 
 if [ -d "$REPO_DIR/.git" ]; then
-    log "updating existing clone in $REPO_DIR"
+    log_info "updating existing clone in $REPO_DIR"
     git -C "$REPO_DIR" remote set-url origin "$CLONE_URL"
     retry_cmd git -C "$REPO_DIR" fetch --depth 1 origin "${GIT_REF:-HEAD}"
     git -C "$REPO_DIR" reset --hard FETCH_HEAD
 else
-    log "cloning $GIT_URL into $REPO_DIR"
+    log_info "cloning $GIT_URL into $REPO_DIR"
     clone_once() {
         # A failed clone can leave a partial $REPO_DIR behind — wipe it before
         # every attempt (including the first) so retries start clean.
@@ -258,14 +326,14 @@ rm -rf "$REPORT_TMP_DIR"
 mkdir -p "$REPORT_TMP_DIR"
 
 if [ "$MODEL_MODE" = "plain" ]; then
-    log "using plain model file: $MODEL_FILE"
+    log_info "using plain model file: $MODEL_FILE"
     xvfb-run -a /opt/archi/Archi -consoleLog -nosplash \
         -application com.archimatetool.commandline.app \
         --loadModel "$MODEL_FILE" \
         --html.createReport "$REPORT_TMP_DIR" \
         1>&2
 else
-    log "using coArchi model directory: $MODEL_DIR"
+    log_info "using coArchi model directory: $MODEL_DIR"
     xvfb-run -a /opt/archi/Archi -consoleLog -nosplash \
         -application com.archimatetool.commandline.app \
         --modelrepository.loadModel "$MODEL_DIR" \
@@ -287,7 +355,7 @@ if [ -d "$REPORT_THEME_DIR/favicon" ]; then
     cp -f "$REPORT_THEME_DIR"/favicon/*.ico "$REPORT_THEME_DIR"/favicon/*.png "$REPORT_TMP_DIR/" \
         || die "failed to copy favicon files"
 else
-    log "WARNING: $REPORT_THEME_DIR/favicon not found, report will have no favicon"
+    log_warn "$REPORT_THEME_DIR/favicon not found, report will have no favicon"
 fi
 
 # Overlay our RU/EN + light/dark theme on top of Archi's stock report assets.
@@ -306,7 +374,7 @@ case "${USE_MODERN_CSS:-true}" in
         USE_MODERN_CSS=true
         ;;
     false)
-        log "USE_MODERN_CSS=false, serving Archi's stock (unthemed) report"
+        log_info "USE_MODERN_CSS=false, serving Archi's stock (unthemed) report"
         USE_MODERN_CSS=false
         ;;
     *) die "USE_MODERN_CSS must be true or false, got: ${USE_MODERN_CSS}" ;;
@@ -314,7 +382,7 @@ esac
 
 if [ "$USE_MODERN_CSS" = "true" ]; then
     if [ -d "$REPORT_THEME_DIR" ]; then
-        log "applying report theme from $REPORT_THEME_DIR"
+        log_info "applying report theme from $REPORT_THEME_DIR"
         cp -f "$REPORT_THEME_DIR/css/model.css" "$REPORT_TMP_DIR/css/model.css" || die "failed to apply report theme (css/model.css)"
         cp -f "$REPORT_THEME_DIR/css/i18n.css" "$REPORT_TMP_DIR/css/i18n.css" || die "failed to apply report theme (css/i18n.css)"
         mkdir -p "$REPORT_TMP_DIR/css/i18n"
@@ -323,7 +391,7 @@ if [ "$USE_MODERN_CSS" = "true" ]; then
         cp -f "$REPORT_THEME_DIR/js/model.js" "$REPORT_TMP_DIR/js/model.js" || die "failed to apply report theme (js/model.js)"
         cp -f "$REPORT_THEME_DIR/js/frame.js" "$REPORT_TMP_DIR/js/frame.js" || die "failed to apply report theme (js/frame.js)"
     else
-        log "WARNING: $REPORT_THEME_DIR not found, serving Archi's stock (unthemed) report"
+        log_warn "$REPORT_THEME_DIR not found, serving Archi's stock (unthemed) report"
     fi
 fi
 
@@ -340,4 +408,4 @@ mkdir -p "$REPORT_DIR"
 find "$REPORT_DIR" -mindepth 1 -delete
 find "$REPORT_TMP_DIR" -mindepth 1 -maxdepth 1 -exec mv -t "$REPORT_DIR" {} +
 rmdir "$REPORT_TMP_DIR"
-log "report published to $REPORT_DIR"
+log_info "report published to $REPORT_DIR"

@@ -14,6 +14,13 @@ on:
           latest release at build time, same as the local build.
         required: false
         type: string
+      project_version:
+        description: >
+          This repo's own SemVer (docs/VERSIONING.md), e.g. 1.1.0. Leave
+          empty for an untagged dev-style build (image still gets :<archi>
+          and :latest, just no combined :<archi>-<project> tag).
+        required: false
+        type: string
       push:
         description: Push the built image to Docker Hub and GHCR
         required: false
@@ -23,27 +30,35 @@ on:
     types: [published]
 
 jobs:
-  # Resolves the version tag once so both matrix legs (amd64/arm64) and the
-  # merge job agree on the same value, instead of each re-resolving "latest"
-  # independently and risking a mismatch if a new Archi release lands mid-run.
+  # Resolves both version numbers once so both matrix legs (amd64/arm64) and
+  # the merge job agree on the same values, instead of each re-resolving
+  # independently and risking a mismatch mid-run. A GitHub Release publish
+  # tags a *project* version (see docs/VERSIONING.md — GitHub Releases carry
+  # human-written notes about what changed in this repo's own code, e.g.
+  # multi-model support), not an Archi version, so the "release" trigger
+  # feeds project_version, and archi_version still falls back to "resolve
+  # latest Archi release" like a plain manual dispatch would.
   version:
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.resolve.outputs.version }}
+      archi_version: ${{ steps.resolve.outputs.archi_version }}
+      project_version: ${{ steps.resolve.outputs.project_version }}
     steps:
-      - name: Resolve version
+      - name: Resolve versions
         id: resolve
         run: |
-          VERSION="${{ github.event.inputs.archi_version }}"
-          if [ -z "$VERSION" ] && [ "${{ github.event_name }}" = "release" ]; then
-            VERSION="${{ github.event.release.tag_name }}"
-            VERSION="${VERSION#v}"
+          ARCHI_VERSION="${{ github.event.inputs.archi_version }}"
+          PROJECT_VERSION="${{ github.event.inputs.project_version }}"
+          if [ -z "$PROJECT_VERSION" ] && [ "${{ github.event_name }}" = "release" ]; then
+            PROJECT_VERSION="${{ github.event.release.tag_name }}"
+            PROJECT_VERSION="${PROJECT_VERSION#v}"
           fi
-          if [ -z "$VERSION" ]; then
-            VERSION="$(curl -fsS https://api.github.com/repos/archimatetool/archi.io/releases/latest \
+          if [ -z "$ARCHI_VERSION" ]; then
+            ARCHI_VERSION="$(curl -fsS https://api.github.com/repos/archimatetool/archi.io/releases/latest \
               | grep -m1 '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')"
           fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "archi_version=$ARCHI_VERSION" >> "$GITHUB_OUTPUT"
+          echo "project_version=$PROJECT_VERSION" >> "$GITHUB_OUTPUT"
 
   # Built per-platform on the runner best suited for it: amd64 on the regular
   # (free) ubuntu-latest, arm64 on GitHub's native ubuntu-24.04-arm runner
@@ -51,7 +66,7 @@ jobs:
   # single-step `docker buildx build --platform linux/amd64,linux/arm64`
   # emulated the arm64 leg's Tycho/Maven build under QEMU on an amd64 runner,
   # which alone took ~24 minutes (see run 33562262412, step "Build and push":
-  # 1422s) vs. the ~7-11 min a native arm64 build takes per CLAUDE.md history.
+  # 1422s) vs. the ~7-11 min a native arm64 build takes per this project's history.
   # Each leg pushes its image *by digest* only (no tags yet, no manifest
   # list) — the merge job below is what actually creates the multi-arch tags.
   build:
@@ -88,7 +103,10 @@ jobs:
           file: docker/Dockerfile
           platforms: ${{ matrix.platform }}
           push: ${{ github.event.inputs.push != 'false' }}
-          build-args: ARCHI_VERSION=${{ needs.version.outputs.version }}
+          build-args: |
+            ARCHI_VERSION=${{ needs.version.outputs.archi_version }}
+            PROJECT_VERSION=${{ needs.version.outputs.project_version || '0.0.0-dev' }}
+            GIT_REVISION=${{ github.sha }}
           # No tags on purpose — this leg only produces a single-platform
           # image identified by digest. The merge job below is what
           # assembles the real :<version>/:latest tags across both digests.
@@ -155,14 +173,23 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Three possible tags per registry (docs/VERSIONING.md): :latest always,
+      # :<archi> when the Archi version is known, and the pinnable
+      # :<archi>-<project> combo when both numbers are known. A project
+      # version alone (with no archi tag) isn't published — the combined tag
+      # is only meaningful paired with the Archi version it was built against.
       - name: Create and push Docker Hub manifest list
         working-directory: /tmp/digests
         run: |
-          VERSION="${{ needs.version.outputs.version }}"
+          ARCHI_VERSION="${{ needs.version.outputs.archi_version }}"
+          PROJECT_VERSION="${{ needs.version.outputs.project_version }}"
           REPO="docker.io/${DOCKERHUB_NAMESPACE}/archimate-report"
           TAG_ARGS="-t ${REPO}:latest"
-          if [ -n "$VERSION" ]; then
-            TAG_ARGS="$TAG_ARGS -t ${REPO}:${VERSION}"
+          if [ -n "$ARCHI_VERSION" ]; then
+            TAG_ARGS="$TAG_ARGS -t ${REPO}:${ARCHI_VERSION}"
+            if [ -n "$PROJECT_VERSION" ]; then
+              TAG_ARGS="$TAG_ARGS -t ${REPO}:${ARCHI_VERSION}-${PROJECT_VERSION}"
+            fi
           fi
           # shellcheck disable=SC2046
           docker buildx imagetools create $TAG_ARGS \
@@ -170,12 +197,16 @@ jobs:
 
       - name: Mirror to GHCR
         run: |
-          VERSION="${{ needs.version.outputs.version }}"
+          ARCHI_VERSION="${{ needs.version.outputs.archi_version }}"
+          PROJECT_VERSION="${{ needs.version.outputs.project_version }}"
           SRC="docker.io/${DOCKERHUB_NAMESPACE}/archimate-report:latest"
           DEST="ghcr.io/${{ github.repository_owner }}/archimate-report"
           TAG_ARGS="-t ${DEST}:latest"
-          if [ -n "$VERSION" ]; then
-            TAG_ARGS="$TAG_ARGS -t ${DEST}:${VERSION}"
+          if [ -n "$ARCHI_VERSION" ]; then
+            TAG_ARGS="$TAG_ARGS -t ${DEST}:${ARCHI_VERSION}"
+            if [ -n "$PROJECT_VERSION" ]; then
+              TAG_ARGS="$TAG_ARGS -t ${DEST}:${ARCHI_VERSION}-${PROJECT_VERSION}"
+            fi
           fi
           # Copies the just-published Docker Hub manifest list straight into
           # GHCR by digest — no rebuild, guarantees the two registries carry
@@ -185,7 +216,7 @@ jobs:
       # Same manual trigger that publishes the image also syncs the Docker
       # Hub repo page's long description from docs/DOCKERHUB.md - one button
       # covers both instead of remembering to separately run
-      # docker/publish-dockerhub-readme.sh by hand with a locally-exported
+      # docker/scripts/publish-dockerhub-readme.sh by hand with a locally-exported
       # PAT. Reuses the same DOCKERHUB_USERNAME/DOCKERHUB_TOKEN secrets as the
       # login step above.
       - name: Publish Docker Hub README
@@ -196,4 +227,4 @@ jobs:
           # publishing under an org whose name differs from the login
           # username).
           DOCKERHUB_NAMESPACE: ${{ env.DOCKERHUB_NAMESPACE }}
-        run: ./docker/publish-dockerhub-readme.sh
+        run: ./docker/scripts/publish-dockerhub-readme.sh

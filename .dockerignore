@@ -5,8 +5,8 @@
 # docker/report-theme/favicon/. Everything below either isn't needed inside
 # the image or is actively large/slow to hash-and-send to the Docker daemon
 # on every build — mirrors the "why" reasoning in .gitignore, not its exact
-# contents (e.g. CLAUDE.md is git-ignored but harmless/tiny to send; not
-# worth listing here).
+# contents (untracked local notes are git-ignored but harmless/tiny to send;
+# not worth listing here).
 .git/
 /Archi/
 /spikes/

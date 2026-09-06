@@ -22,6 +22,22 @@
 	handle /status {
 		reverse_proxy 127.0.0.1:8088
 	}
+	# Multi-model mode (see docs/MULTI_MODEL.md): each model's webhook/status
+	# lives under its own slug prefix, e.g. /myslug/webhook, /myslug/status.
+	# This Caddyfile is static and doesn't know the configured slugs (they're
+	# env-driven, discovered by archi-webhook itself at startup) — it just
+	# forwards anything shaped like <segment>/webhook or <segment>/status
+	# there, and archi-webhook 404s any slug it doesn't recognize. `*` matches
+	# within one path segment only (does not cross `/`), so this can't
+	# accidentally swallow deeper report paths like /myslug/img/status.png.
+	# WEBHOOK_PATH is not consulted here — per §32.1 it has no meaning once
+	# slugs are in play, the per-model webhook path is always /<slug>/webhook.
+	handle /*/webhook {
+		reverse_proxy 127.0.0.1:8088
+	}
+	handle /*/status {
+		reverse_proxy 127.0.0.1:8088
+	}
 	handle {
 		root * /data/report
 		file_server

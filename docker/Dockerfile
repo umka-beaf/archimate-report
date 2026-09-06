@@ -45,10 +45,10 @@ RUN set -eux; \
         # "Archi-Linux64-5.10.0.tgz"). Normalize to dots here so ARCHI_VERSION
         # (used below for the persisted .archi_version file, the filename,
         # and as the first tag-path attempt) stays in the dotted form the
-        # rest of this project/README/CLAUDE.md assumes; the actual tag path
-        # is resolved by trying both conventions below rather than assuming
+        # rest of this project/README assumes; the actual tag path is
+        # resolved by trying both conventions below rather than assuming
         # one, since archi.io has changed this convention before without
-        # warning (see docs/PATCHES.md / CLAUDE.md release notes).
+        # warning (see docs/PATCHES.md).
         ARCHI_VERSION=$(printf '%s' "$ARCHI_VERSION" | tr '_' '.'); \
     fi; \
     echo "Resolved ARCHI_VERSION=${ARCHI_VERSION}"; \
@@ -133,6 +133,23 @@ FROM debian:trixie-slim
 # See the ARCHI_VERSION comment above — same "latest" + cache caveat applies.
 ARG CADDY_VERSION=latest
 ARG TARGETARCH
+ARG ARCHI_VERSION
+
+# This repo's own SemVer (see docs/VERSIONING.md) — independent of
+# ARCHI_VERSION. Passed by the release workflow; defaults to "0.0.0-dev" for
+# plain local `docker build` runs where nobody set it. GIT_REVISION is the
+# exact commit the image was built from, for traceability even when someone
+# only ever pulls :latest.
+ARG PROJECT_VERSION=0.0.0-dev
+ARG GIT_REVISION=unknown
+
+LABEL org.opencontainers.image.title="archimate-report" \
+      org.opencontainers.image.description="Clones an ArchiMate model (plain or coArchi) and serves its Archi CLI-generated HTML report, regenerating on git webhooks." \
+      org.opencontainers.image.version="${PROJECT_VERSION}" \
+      org.opencontainers.image.revision="${GIT_REVISION}" \
+      org.opencontainers.image.source="https://github.com/umka-beaf/archimate-report" \
+      org.opencontainers.image.licenses="MIT" \
+      tech.teniaev.archimate-report.archi-version="${ARCHI_VERSION}"
 
 # coArchi (org.archicontribs.modelrepository) is NOT bundled in either Archi
 # distribution (plain amd64 tgz or the arm64 Tycho build) — it's a separate
@@ -186,6 +203,14 @@ COPY --from=webhook-builder /out/archi-webhook /usr/local/bin/archi-webhook
 
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY docker/generate.sh /usr/local/bin/generate.sh
+# Sourced (not executed) by both entrypoint.sh and generate.sh, see
+# docker/lib/log.sh (LOG_LEVEL filtering) and docker/lib/model-config.sh
+# (multi-model discovery, docs/MULTI_MODEL.md) — no chmod +x needed.
+COPY docker/lib/log.sh /usr/local/lib/log.sh
+COPY docker/lib/model-config.sh /usr/local/lib/model-config.sh
+# Sourced by entrypoint.sh only (generate.sh never touches stub pages, see
+# docs/MULTI_MODEL.md) — no chmod +x needed.
+COPY docker/lib/report-stub.sh /usr/local/lib/report-stub.sh
 COPY docker/Caddyfile /etc/caddy/Caddyfile
 RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/generate.sh /usr/local/bin/archi-webhook
 
