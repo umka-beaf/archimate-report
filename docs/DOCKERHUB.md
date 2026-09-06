@@ -4,6 +4,17 @@
 
 📦 Source / Исходники: [github.com/umka-beaf/archimate-report](https://github.com/umka-beaf/archimate-report)
 
+A Docker image that clones a git repository containing an ArchiMate model,
+generates an HTML report via the Archi CLI, and serves it as static files.
+Supports a webhook to regenerate on push. Multi-arch: `linux/amd64` +
+`linux/arm64` — both architectures built natively (arm64 from Archi source,
+no emulation at runtime).
+
+🥧 **Killer feature: Archi finally runs on a Raspberry Pi** — no official
+Linux ARM64 build exists, so we build one natively from source.
+📝 Plus an RU/EN + light/dark report theme that renders element documentation
+as Markdown instead of raw text (`USE_MODERN_CSS`).
+
 Docker-образ, который клонирует git-репозиторий с ArchiMate-моделью, генерирует
 HTML-отчёт через Archi CLI и раздаёт его статикой. Поддерживает вебхук для
 перегенерации по пушу. Multi-arch: `linux/amd64` + `linux/arm64` — обе
@@ -14,11 +25,6 @@ HTML-отчёт через Archi CLI и раздаёт его статикой. 
 Linux ARM64-сборки не существует, мы собираем её нативно из исходников.
 📝 Плюс RU/EN + light/dark тема отчёта с рендерингом документации элементов
 как Markdown, а не сырого текста (`USE_MODERN_CSS`).
-
-🥧 **Killer feature: Archi finally runs on a Raspberry Pi** — no official
-Linux ARM64 build exists, so we build one natively from source.
-📝 Plus an RU/EN + light/dark report theme that renders element documentation
-as Markdown instead of raw text (`USE_MODERN_CSS`).
 
 ---
 
