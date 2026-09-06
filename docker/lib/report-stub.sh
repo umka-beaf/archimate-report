@@ -20,7 +20,7 @@ mc_publish_stub() {
     local theme_dir="${REPORT_THEME_DIR:-/opt/report-theme}"
 
     mkdir -p "$dir"
-    cat > "$dir/index.html" <<HTML
+    cat > "$dir/index.html" << HTML
 <!doctype html>
 <html lang="en">
 <head>
