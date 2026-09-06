@@ -58,9 +58,9 @@ jobs:
               | grep -m1 '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')"
           fi
           # archi.io's release tag_name convention flip-flops between dotted
-          # (5.10.0) and underscored (5_10_0) across releases (see
-          # docker/Dockerfile's amd64 download step, and CLAUDE.md history) —
-          # normalize to the dotted form here so every downstream consumer
+          # (5.10.0) and underscored (5_10_0) across releases (see the
+          # matching dual-fallback in docker/Dockerfile's amd64 download
+          # step) — normalize to the dotted form here so every downstream consumer
           # (the Docker build-arg, the upstream archimatetool/archi git tag
           # release_<version> used by the arm64 source build, which is always
           # dotted regardless of archi.io's binary release naming) gets a
