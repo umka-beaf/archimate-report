@@ -53,7 +53,16 @@ RU+EN):
 | 🎨 [docs/THEMING.md](docs/THEMING.md) | RU/EN + light/dark тема отчёта (`USE_MODERN_CSS`): как устроена, как кастомизировать |
 | 🪝 [docs/WEBHOOK.md](docs/WEBHOOK.md) | Go-listener `archi-webhook`: три схемы проверки подписи, однослотовый дебаунс, формат `/status` |
 | 🧩 [docs/PATCHES.md](docs/PATCHES.md) | Аддитивный патч для нативной arm64-сборки Archi из исходников — зачем он и как встроен в `docker/Dockerfile` |
+| 🗂️ [docs/MULTI_MODEL.md](docs/MULTI_MODEL.md) | Раздача нескольких моделей одним инстансом (`MODEL_<N>_*`): конфигурация, пути, очередь генерации |
+| 🔒 [docs/SECURITY.md](docs/SECURITY.md) | Сервис не аутентифицирует сам — рекомендованная схема forward-auth по path, как не сломать вебхук |
 | 🐋 [docs/DOCKERHUB.md](docs/DOCKERHUB.md) | Короткая версия этого README для страницы образа на Docker Hub |
+
+**Несколько моделей в одном инстансе.** Помимо одиночной модели через
+`GIT_URL`, сервис умеет раздавать сразу несколько ArchiMate-отчётов из
+одного контейнера — каждый под своим путём `/<slug>/`, конфигурация через
+индексированные `MODEL_<N>_*`-переменные. Подробности, включая
+рекомендации по внешней аутентификации по path — в
+[docs/MULTI_MODEL.md](docs/MULTI_MODEL.md) и [docs/SECURITY.md](docs/SECURITY.md).
 
 ### ✨ Почему это может быть полезно
 
@@ -396,7 +405,16 @@ Deeper topics live in their own docs (all bilingual, RU+EN):
 | 🎨 [docs/THEMING.md](docs/THEMING.md) | The RU/EN + light/dark report theme (`USE_MODERN_CSS`): how it works, how to customize it |
 | 🪝 [docs/WEBHOOK.md](docs/WEBHOOK.md) | The `archi-webhook` Go listener: the three signature-verification schemes, the single-slot debounce, the `/status` shape |
 | 🧩 [docs/PATCHES.md](docs/PATCHES.md) | The additive patch behind the native arm64 Archi source build — why it exists and how it's wired into `docker/Dockerfile` |
+| 🗂️ [docs/MULTI_MODEL.md](docs/MULTI_MODEL.md) | Serving several models from one instance (`MODEL_<N>_*`): configuration, paths, the generation queue |
+| 🔒 [docs/SECURITY.md](docs/SECURITY.md) | The service doesn't authenticate on its own — recommended forward-auth-by-path pattern, how not to break the webhook |
 | 🐋 [docs/DOCKERHUB.md](docs/DOCKERHUB.md) | The short version of this README, used for the Docker Hub image page |
+
+**Multiple models from one instance.** Besides a single model via `GIT_URL`,
+the service can serve several ArchiMate reports from one container — each
+under its own `/<slug>/` path, configured via indexed `MODEL_<N>_*`
+variables. Details, including recommendations for external path-based
+authentication, are in [docs/MULTI_MODEL.md](docs/MULTI_MODEL.md) and
+[docs/SECURITY.md](docs/SECURITY.md).
 
 ### ✨ Why this might be useful
 
