@@ -34,8 +34,8 @@ set -euo pipefail
 
 log() { printf '%s [smoke-test] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 die() {
-    log "FAIL: $*"
-    exit 1
+	log "FAIL: $*"
+	exit 1
 }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -52,93 +52,93 @@ COARCHI_REPO="https://github.com/GLYCAM-Web/coArchi-GLYCAM-Web.git"
 
 CONTAINERS=()
 cleanup() {
-    local c
-    for c in "${CONTAINERS[@]:-}"; do
-        if [ -n "$c" ]; then docker rm -f "$c" > /dev/null 2>&1 || true; fi
-    done
+	local c
+	for c in "${CONTAINERS[@]:-}"; do
+		if [ -n "$c" ]; then docker rm -f "$c" > /dev/null 2>&1 || true; fi
+	done
 }
 trap cleanup EXIT
 
 if [ -z "${SKIP_BUILD:-}" ]; then
-    log "building $IMAGE (ARCHI_VERSION=$ARCHI_VERSION, host platform only)"
-    docker buildx build \
-        --load \
-        -f "$REPO_ROOT/docker/Dockerfile" \
-        --build-arg "ARCHI_VERSION=$ARCHI_VERSION" \
-        -t "$IMAGE" \
-        "$REPO_ROOT" \
-        || die "docker build failed"
+	log "building $IMAGE (ARCHI_VERSION=$ARCHI_VERSION, host platform only)"
+	docker buildx build \
+		--load \
+		-f "$REPO_ROOT/docker/Dockerfile" \
+		--build-arg "ARCHI_VERSION=$ARCHI_VERSION" \
+		-t "$IMAGE" \
+		"$REPO_ROOT" \
+		|| die "docker build failed"
 else
-    log "SKIP_BUILD set — reusing existing image $IMAGE"
+	log "SKIP_BUILD set — reusing existing image $IMAGE"
 fi
 
 wait_for_http() {
-    # wait_for_http <url> <timeout_seconds>
-    local url="$1" timeout="$2" waited=0
-    while ! curl -fsS -o /dev/null "$url" 2> /dev/null; do
-        waited=$((waited + 1))
-        [ "$waited" -ge "$timeout" ] && return 1
-        sleep 1
-    done
-    return 0
+	# wait_for_http <url> <timeout_seconds>
+	local url="$1" timeout="$2" waited=0
+	while ! curl -fsS -o /dev/null "$url" 2> /dev/null; do
+		waited=$((waited + 1))
+		[ "$waited" -ge "$timeout" ] && return 1
+		sleep 1
+	done
+	return 0
 }
 
 check_report() {
-    # check_report <label> <port> <expect_title_substring>
-    local label="$1" port="$2" expect="$3"
-    log "[$label] waiting for report on :$port"
-    wait_for_http "http://127.0.0.1:$port/status" 60 || {
-        docker logs "${CONTAINERS[-1]}" 2>&1 | tail -50
-        die "[$label] container never became reachable (30s+)"
-    }
+	# check_report <label> <port> <expect_title_substring>
+	local label="$1" port="$2" expect="$3"
+	log "[$label] waiting for report on :$port"
+	wait_for_http "http://127.0.0.1:$port/status" 60 || {
+		docker logs "${CONTAINERS[-1]}" 2>&1 | tail -50
+		die "[$label] container never became reachable (30s+)"
+	}
 
-    # Below, grep -q against a variable's content uses a herestring
-    # (`grep ... <<<"$x"`), never a pipe (`printf ... | grep -q ...`).
-    # grep -q exits the instant it finds a match, which - piped from a
-    # live writer - sends that writer SIGPIPE if it's still writing; under
-    # `set -o pipefail` (enabled above) that writer's non-zero exit status
-    # wins over grep's own success, failing the check even though the match
-    # was found. A herestring has no separate writer process racing grep,
-    # so it doesn't hit this. Found running this script for real for the
-    # first time — it had been silently broken since it was written until then.
-    local status_json body_bytes
-    status_json=$(curl -fsS "http://127.0.0.1:$port/status") || die "[$label] /status did not respond"
-    grep -q '"generating"' <<< "$status_json" || die "[$label] /status response missing expected field: $status_json"
-    log "[$label] /status OK: $status_json"
+	# Below, grep -q against a variable's content uses a herestring
+	# (`grep ... <<<"$x"`), never a pipe (`printf ... | grep -q ...`).
+	# grep -q exits the instant it finds a match, which - piped from a
+	# live writer - sends that writer SIGPIPE if it's still writing; under
+	# `set -o pipefail` (enabled above) that writer's non-zero exit status
+	# wins over grep's own success, failing the check even though the match
+	# was found. A herestring has no separate writer process racing grep,
+	# so it doesn't hit this. Found running this script for real for the
+	# first time — it had been silently broken since it was written until then.
+	local status_json body_bytes
+	status_json=$(curl -fsS "http://127.0.0.1:$port/status") || die "[$label] /status did not respond"
+	grep -q '"generating"' <<< "$status_json" || die "[$label] /status response missing expected field: $status_json"
+	log "[$label] /status OK: $status_json"
 
-    curl -fsS -o /dev/null "http://127.0.0.1:$port/" || die "[$label] report root did not respond HTTP 200"
-    body=$(curl -fsS "http://127.0.0.1:$port/")
-    body_bytes=${#body}
-    [ "$body_bytes" -gt 0 ] || die "[$label] index.html served empty (see archi#980: https://github.com/archimatetool/archi/issues/980)"
-    grep -qi "$expect" <<< "$body" || die "[$label] report body missing expected title substring: $expect"
-    log "[$label] report OK: $body_bytes bytes, title contains '$expect'"
+	curl -fsS -o /dev/null "http://127.0.0.1:$port/" || die "[$label] report root did not respond HTTP 200"
+	body=$(curl -fsS "http://127.0.0.1:$port/")
+	body_bytes=${#body}
+	[ "$body_bytes" -gt 0 ] || die "[$label] index.html served empty (see archi#980: https://github.com/archimatetool/archi/issues/980)"
+	grep -qi "$expect" <<< "$body" || die "[$label] report body missing expected title substring: $expect"
+	log "[$label] report OK: $body_bytes bytes, title contains '$expect'"
 }
 
 # --- Test 1: plain format, explicit MODEL_PATH ---
 log "[plain] starting container"
 C1=$(docker run -d \
-    -p 3101:3000 \
-    -e GIT_URL="$PLAIN_REPO" \
-    -e MODEL_PATH="$PLAIN_MODEL_PATH" \
-    "$IMAGE")
+	-p 3101:3000 \
+	-e GIT_URL="$PLAIN_REPO" \
+	-e MODEL_PATH="$PLAIN_MODEL_PATH" \
+	"$IMAGE")
 CONTAINERS+=("$C1")
 check_report "plain" 3101 "Archisurance"
 
 # --- Test 2: coArchi format, auto-detected, webhook enabled (generic) ---
 log "[coarchi] starting container"
 C2=$(docker run -d \
-    -p 3102:3000 \
-    -e GIT_URL="$COARCHI_REPO" \
-    -e WEBHOOK_SECRET="smoke-test-secret" \
-    -e WEBHOOK_PROVIDER="generic" \
-    "$IMAGE")
+	-p 3102:3000 \
+	-e GIT_URL="$COARCHI_REPO" \
+	-e WEBHOOK_SECRET="smoke-test-secret" \
+	-e WEBHOOK_PROVIDER="generic" \
+	"$IMAGE")
 CONTAINERS+=("$C2")
 check_report "coarchi" 3102 "GLYCAM-Web"
 
 log "[coarchi] triggering webhook"
 WEBHOOK_RESP=$(curl -fsS -o /dev/null -w '%{http_code}' -X POST \
-    -H "X-Webhook-Secret: smoke-test-secret" \
-    "http://127.0.0.1:3102/webhook")
+	-H "X-Webhook-Secret: smoke-test-secret" \
+	"http://127.0.0.1:3102/webhook")
 [ "$WEBHOOK_RESP" = "202" ] || die "[coarchi] webhook trigger expected HTTP 202, got $WEBHOOK_RESP"
 log "[coarchi] webhook accepted (202), waiting for regeneration to finish"
 # Poll instead of a single fixed sleep+check - a flat "sleep 5" is a flaky
@@ -147,12 +147,12 @@ log "[coarchi] webhook accepted (202), waiting for regeneration to finish"
 # because the box was briefly busy.
 WEBHOOK_DONE=0
 for _ in $(seq 1 20); do
-    STATUS_AFTER_WEBHOOK=$(curl -fsS "http://127.0.0.1:3102/status")
-    if grep -q '"generating":false' <<< "$STATUS_AFTER_WEBHOOK" && grep -q '"last_run_at":"20' <<< "$STATUS_AFTER_WEBHOOK"; then
-        WEBHOOK_DONE=1
-        break
-    fi
-    sleep 1
+	STATUS_AFTER_WEBHOOK=$(curl -fsS "http://127.0.0.1:3102/status")
+	if grep -q '"generating":false' <<< "$STATUS_AFTER_WEBHOOK" && grep -q '"last_run_at":"20' <<< "$STATUS_AFTER_WEBHOOK"; then
+		WEBHOOK_DONE=1
+		break
+	fi
+	sleep 1
 done
 [ "$WEBHOOK_DONE" = "1" ] || die "[coarchi] regeneration still running after 20s — check container logs"
 log "[coarchi] webhook regeneration OK"
@@ -163,8 +163,8 @@ log "[coarchi] webhook regeneration OK"
 # under `set -e` aborts the whole script on the very rejection we're testing
 # for. Without -f, curl exits 0 for any HTTP status and just reports it.
 WEBHOOK_REJECT=$(curl -sS -o /dev/null -w '%{http_code}' -X POST \
-    -H "X-Webhook-Secret: wrong-secret" \
-    "http://127.0.0.1:3102/webhook")
+	-H "X-Webhook-Secret: wrong-secret" \
+	"http://127.0.0.1:3102/webhook")
 [ "$WEBHOOK_REJECT" = "401" ] || die "[coarchi] webhook with wrong secret expected HTTP 401, got $WEBHOOK_REJECT"
 log "[coarchi] webhook auth rejection OK (401)"
 
@@ -176,17 +176,17 @@ log "[coarchi] webhook auth rejection OK (401)"
 # meantime (§32.4).
 log "[multi] starting container (archisurance, glycam, broken)"
 C3=$(docker run -d \
-    -p 3103:3000 \
-    -e MODEL_1_SLUG=archisurance \
-    -e MODEL_1_GIT_URL="$PLAIN_REPO" \
-    -e MODEL_1_MODEL_PATH="$PLAIN_MODEL_PATH" \
-    -e MODEL_2_SLUG=glycam \
-    -e MODEL_2_GIT_URL="$COARCHI_REPO" \
-    -e MODEL_3_SLUG=broken \
-    -e MODEL_3_GIT_URL="https://github.com/umka-beaf/this-repo-does-not-exist.git" \
-    -e WEBHOOK_SECRET="smoke-test-secret" \
-    -e WEBHOOK_PROVIDER="generic" \
-    "$IMAGE")
+	-p 3103:3000 \
+	-e MODEL_1_SLUG=archisurance \
+	-e MODEL_1_GIT_URL="$PLAIN_REPO" \
+	-e MODEL_1_MODEL_PATH="$PLAIN_MODEL_PATH" \
+	-e MODEL_2_SLUG=glycam \
+	-e MODEL_2_GIT_URL="$COARCHI_REPO" \
+	-e MODEL_3_SLUG=broken \
+	-e MODEL_3_GIT_URL="https://github.com/umka-beaf/this-repo-does-not-exist.git" \
+	-e WEBHOOK_SECRET="smoke-test-secret" \
+	-e WEBHOOK_PROVIDER="generic" \
+	"$IMAGE")
 CONTAINERS+=("$C3")
 
 # The broken model retries 3x with backoff (3s+6s, see generate.sh) before
@@ -195,8 +195,8 @@ CONTAINERS+=("$C3")
 # declaring the container unreachable.
 log "[multi] waiting for container to come up (startup queue: archisurance -> glycam -> broken)"
 wait_for_http "http://127.0.0.1:3103/status" 90 || {
-    docker logs "$C3" 2>&1 | tail -80
-    die "[multi] container never became reachable (90s+)"
+	docker logs "$C3" 2>&1 | tail -80
+	die "[multi] container never became reachable (90s+)"
 }
 
 RUNNING=$(docker inspect -f '{{.State.Running}}' "$C3")
@@ -207,7 +207,7 @@ log "[multi] container survived the broken model's startup failure — OK"
 ROOT_BODY=$(curl -fsS "http://127.0.0.1:3103/") || die "[multi] root / did not respond"
 grep -qi "ArchiMate Report Service" <<< "$ROOT_BODY" || die "[multi] root placeholder missing expected title"
 for leaked in archisurance glycam broken; do
-    grep -qi "$leaked" <<< "$ROOT_BODY" && die "[multi] root placeholder leaks slug '$leaked' — should not enumerate models (§32.4)"
+	grep -qi "$leaked" <<< "$ROOT_BODY" && die "[multi] root placeholder leaks slug '$leaked' — should not enumerate models (§32.4)"
 done
 log "[multi] root placeholder OK (no slugs leaked)"
 
@@ -244,34 +244,34 @@ log "[multi] /archisurance/status OK: $ARCHISURANCE_STATUS"
 
 # Per-slug webhook round-trip on the model that already succeeded at startup.
 WEBHOOK_RESP=$(curl -fsS -o /dev/null -w '%{http_code}' -X POST \
-    -H "X-Webhook-Secret: smoke-test-secret" \
-    "http://127.0.0.1:3103/archisurance/webhook")
+	-H "X-Webhook-Secret: smoke-test-secret" \
+	"http://127.0.0.1:3103/archisurance/webhook")
 [ "$WEBHOOK_RESP" = "202" ] || die "[multi] /archisurance/webhook expected HTTP 202, got $WEBHOOK_RESP"
 log "[multi] /archisurance/webhook accepted (202), waiting for regeneration to finish"
 WEBHOOK_DONE=0
 for _ in $(seq 1 20); do
-    STATUS_AFTER_WEBHOOK=$(curl -fsS "http://127.0.0.1:3103/archisurance/status")
-    if grep -q '"generating":false' <<< "$STATUS_AFTER_WEBHOOK" && grep -q '"last_success":true' <<< "$STATUS_AFTER_WEBHOOK"; then
-        WEBHOOK_DONE=1
-        break
-    fi
-    sleep 1
+	STATUS_AFTER_WEBHOOK=$(curl -fsS "http://127.0.0.1:3103/archisurance/status")
+	if grep -q '"generating":false' <<< "$STATUS_AFTER_WEBHOOK" && grep -q '"last_success":true' <<< "$STATUS_AFTER_WEBHOOK"; then
+		WEBHOOK_DONE=1
+		break
+	fi
+	sleep 1
 done
 [ "$WEBHOOK_DONE" = "1" ] || die "[multi] /archisurance/webhook regeneration still not done after 20s — check container logs"
 log "[multi] /archisurance/webhook regeneration OK"
 
 # Wrong secret on a real slug's webhook -> 401 (auth still enforced per-slug).
 WRONG_SECRET_CODE=$(curl -sS -o /dev/null -w '%{http_code}' -X POST \
-    -H "X-Webhook-Secret: wrong-secret" \
-    "http://127.0.0.1:3103/archisurance/webhook")
+	-H "X-Webhook-Secret: wrong-secret" \
+	"http://127.0.0.1:3103/archisurance/webhook")
 [ "$WRONG_SECRET_CODE" = "401" ] || die "[multi] /archisurance/webhook with wrong secret expected HTTP 401, got $WRONG_SECRET_CODE"
 log "[multi] /archisurance/webhook auth rejection OK (401)"
 
 # Webhook for an unrecognized slug -> 404 (route never registered, distinct
 # from the 401 above — auth isn't even reached for a slug that doesn't exist).
 UNKNOWN_WEBHOOK_CODE=$(curl -sS -o /dev/null -w '%{http_code}' -X POST \
-    -H "X-Webhook-Secret: smoke-test-secret" \
-    "http://127.0.0.1:3103/nosuchmodel/webhook")
+	-H "X-Webhook-Secret: smoke-test-secret" \
+	"http://127.0.0.1:3103/nosuchmodel/webhook")
 [ "$UNKNOWN_WEBHOOK_CODE" = "404" ] || die "[multi] webhook for unknown slug expected HTTP 404, got $UNKNOWN_WEBHOOK_CODE"
 log "[multi] webhook for unknown slug 404 OK"
 

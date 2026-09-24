@@ -14,8 +14,8 @@
 # caller's own startup path.
 
 mc_die() {
-    log_error "$*"
-    exit 1
+	log_error "$*"
+	exit 1
 }
 
 # Prints the sorted (numeric) list of <N> for every MODEL_<N>_SLUG found in
@@ -34,39 +34,39 @@ mc_die() {
 # newlines, which would corrupt line-based env parsing. compgen -v never
 # touches values, so it can't be confused by what's inside them.
 mc_model_indices() {
-    local -A seen_slugs=()
-    local -a indices=()
-    local var n slug
+	local -A seen_slugs=()
+	local -a indices=()
+	local var n slug
 
-    while IFS= read -r var; do
-        [[ "$var" =~ ^MODEL_([0-9]+)_SLUG$ ]] || continue
-        n="${BASH_REMATCH[1]}"
-        slug="${!var}"
-        [ -n "$slug" ] || mc_die "MODEL_${n}_SLUG is set but empty"
-        [[ "$slug" =~ ^[A-Za-z0-9-]+$ ]] || mc_die "MODEL_${n}_SLUG=\"$slug\" is invalid — only ASCII letters, digits, and hyphens are allowed"
-        if [ -n "${seen_slugs[$slug]:-}" ]; then
-            mc_die "duplicate slug \"$slug\": used by both MODEL_${seen_slugs[$slug]}_SLUG and MODEL_${n}_SLUG"
-        fi
-        seen_slugs["$slug"]="$n"
-        indices+=("$n")
-    done < <(compgen -v)
+	while IFS= read -r var; do
+		[[ "$var" =~ ^MODEL_([0-9]+)_SLUG$ ]] || continue
+		n="${BASH_REMATCH[1]}"
+		slug="${!var}"
+		[ -n "$slug" ] || mc_die "MODEL_${n}_SLUG is set but empty"
+		[[ "$slug" =~ ^[A-Za-z0-9-]+$ ]] || mc_die "MODEL_${n}_SLUG=\"$slug\" is invalid — only ASCII letters, digits, and hyphens are allowed"
+		if [ -n "${seen_slugs[$slug]:-}" ]; then
+			mc_die "duplicate slug \"$slug\": used by both MODEL_${seen_slugs[$slug]}_SLUG and MODEL_${n}_SLUG"
+		fi
+		seen_slugs["$slug"]="$n"
+		indices+=("$n")
+	done < <(compgen -v)
 
-    [ "${#indices[@]}" -eq 0 ] && return 0
+	[ "${#indices[@]}" -eq 0 ] && return 0
 
-    printf '%s\n' "${indices[@]}" | sort -n
+	printf '%s\n' "${indices[@]}" | sort -n
 }
 
 # Prints the value of MODEL_<n>_<key> (e.g. `mc_model_var 1 GIT_URL` reads
 # MODEL_1_GIT_URL), or an empty string if it's unset — mirrors how the
 # legacy single-model script reads GIT_URL/GIT_REF/... via "${VAR:-}".
 mc_model_var() {
-    local n="$1" key="$2" var
-    var="MODEL_${n}_${key}"
-    printf '%s' "${!var:-}"
+	local n="$1" key="$2" var
+	var="MODEL_${n}_${key}"
+	printf '%s' "${!var:-}"
 }
 
 # Prints the slug for model index <n> (i.e. MODEL_<n>_SLUG). Assumes <n> came
 # from mc_model_indices, so no re-validation here.
 mc_model_slug() {
-    mc_model_var "$1" SLUG
+	mc_model_var "$1" SLUG
 }

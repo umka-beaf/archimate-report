@@ -23,7 +23,6 @@ WORKDIR /src
 COPY docker/webhook/go.mod docker/webhook/main.go ./
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o /out/archi-webhook .
 
-
 FROM debian:trixie-slim AS archi-linux-amd64
 
 # "latest" resolves via the GitHub Releases API at build time. Pin an exact
@@ -36,25 +35,29 @@ RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends ca-certificates curl tar; \
     rm -rf /var/lib/apt/lists/*; \
+    ARCHI_TAG=""; \
     if [ "$ARCHI_VERSION" = "latest" ]; then \
         LATEST_JSON=$(curl -fsSL https://api.github.com/repos/archimatetool/archi.io/releases/latest); \
-        ARCHI_VERSION=$(printf '%s' "$LATEST_JSON" | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/'); \
-        # archi.io has flip-flopped release *tag* conventions across releases
-        # - dotted (e.g. "5.10.0") on some, underscored (e.g. "5_9_0") on
-        # others - while the asset *filename* has always stayed dotted (e.g.
-        # "Archi-Linux64-5.10.0.tgz"). Normalize to dots here so ARCHI_VERSION
-        # (used below for the persisted .archi_version file, the filename,
-        # and as the first tag-path attempt) stays in the dotted form the
-        # rest of this project/README assumes; the actual tag path is
-        # resolved by trying both conventions below rather than assuming
-        # one, since archi.io has changed this convention before without
-        # warning (see docs/PATCHES.md).
-        ARCHI_VERSION=$(printf '%s' "$ARCHI_VERSION" | tr '_' '.'); \
+        ARCHI_TAG=$(printf '%s' "$LATEST_JSON" | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/'); \
+        # archi.io has flip-flopped release *tag* conventions across releases -
+        # dotted (e.g. "5.10.0"), fully underscored (e.g. "5_9_0"), and even a
+        # mixed form (e.g. "5.10_0") - while the asset *filename* has always
+        # stayed dotted (e.g. "Archi-Linux64-5.10.0.tgz"). Normalize to dots for
+        # ARCHI_VERSION (used below for the persisted .archi_version file and
+        # the filename) so it stays in the dotted form the rest of this
+        # project/README assumes, but keep the raw, un-normalized $ARCHI_TAG
+        # around too and try it first when building the download URL below -
+        # normalizing it away is what breaks on a mixed tag like "5.10_0".
+        ARCHI_VERSION=$(printf '%s' "$ARCHI_TAG" | tr '_' '.'); \
     fi; \
     echo "Resolved ARCHI_VERSION=${ARCHI_VERSION}"; \
-    # Try the dotted tag first, fall back to the underscored form if that
-    # 404s - see the tag-convention note above.
-    curl -fsSL -o /tmp/archi.tgz \
+    # Try, in order: the raw release tag as reported by the API (handles any
+    # convention, including a mixed one - only known when ARCHI_VERSION was
+    # "latest"), then the fully dotted tag, then the fully underscored tag -
+    # see the tag-convention note above.
+    { [ -n "$ARCHI_TAG" ] && curl -fsSL -o /tmp/archi.tgz \
+      "https://github.com/archimatetool/archi.io/releases/download/${ARCHI_TAG}/Archi-Linux64-${ARCHI_VERSION}.tgz"; } \
+      || curl -fsSL -o /tmp/archi.tgz \
       "https://github.com/archimatetool/archi.io/releases/download/${ARCHI_VERSION}/Archi-Linux64-${ARCHI_VERSION}.tgz" \
       || curl -fsSL -o /tmp/archi.tgz \
       "https://github.com/archimatetool/archi.io/releases/download/$(printf '%s' "$ARCHI_VERSION" | tr '.' '_')/Archi-Linux64-${ARCHI_VERSION}.tgz"; \
@@ -63,7 +66,6 @@ RUN set -eux; \
     rm -f /tmp/archi.tgz; \
     chmod +x /opt/archi/Archi; \
     echo "${ARCHI_VERSION}" > /opt/archi/.archi_version
-
 
 # Floating 3.x tag (not a pinned patch version, e.g. not 3.9.9) for the same
 # reason as golang:1-alpine above — Maven itself has no compatibility
@@ -120,13 +122,11 @@ RUN set -eux; \
     . /tmp/archi_version.env; \
     echo "${ARCHI_VERSION}" > /opt/archi/.archi_version
 
-
 # Arch-selecting stage: buildx resolves this per platform during a
 # `--platform linux/amd64,linux/arm64` build, so each platform only ever
 # executes its own archi-linux-* stage above — the amd64 build never pays
 # the Tycho cost, and vice versa.
 FROM archi-linux-${TARGETARCH} AS archi-final
-
 
 FROM debian:trixie-slim
 
@@ -144,12 +144,12 @@ ARG PROJECT_VERSION=0.0.0-dev
 ARG GIT_REVISION=unknown
 
 LABEL org.opencontainers.image.title="archimate-report" \
-      org.opencontainers.image.description="Clones an ArchiMate model (plain or coArchi) and serves its Archi CLI-generated HTML report, regenerating on git webhooks." \
-      org.opencontainers.image.version="${PROJECT_VERSION}" \
-      org.opencontainers.image.revision="${GIT_REVISION}" \
-      org.opencontainers.image.source="https://github.com/umka-beaf/archimate-report" \
-      org.opencontainers.image.licenses="MIT" \
-      tech.teniaev.archimate-report.archi-version="${ARCHI_VERSION}"
+    org.opencontainers.image.description="Clones an ArchiMate model (plain or coArchi) and serves its Archi CLI-generated HTML report, regenerating on git webhooks." \
+    org.opencontainers.image.version="${PROJECT_VERSION}" \
+    org.opencontainers.image.revision="${GIT_REVISION}" \
+    org.opencontainers.image.source="https://github.com/umka-beaf/archimate-report" \
+    org.opencontainers.image.licenses="MIT" \
+    tech.teniaev.archimate-report.archi-version="${ARCHI_VERSION}"
 
 # coArchi (org.archicontribs.modelrepository) is NOT bundled in either Archi
 # distribution (plain amd64 tgz or the arm64 Tycho build) — it's a separate
@@ -166,10 +166,10 @@ ARG COARCHI_VERSION=0.9.7
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
-        ca-certificates curl tar unzip git openssh-client \
-        xvfb xauth dbus dbus-x11 \
-        libgtk-3-0 libxext6 libxrender1 libxi6 libxtst6 \
-        libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libglib2.0-0; \
+      ca-certificates curl tar unzip git openssh-client \
+      xvfb xauth dbus dbus-x11 \
+      libgtk-3-0 libxext6 libxrender1 libxi6 libxtst6 \
+      libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libglib2.0-0; \
     # The amd64 Archi-Linux64 tgz bundles its own JRE (the container runs
     # without installing Java separately). The arm64 Tycho product does not
     # bundle one (confirmed on a Raspberry Pi 5) — install a native arm64

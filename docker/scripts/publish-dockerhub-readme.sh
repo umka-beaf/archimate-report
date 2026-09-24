@@ -30,8 +30,8 @@ set -euo pipefail
 
 log() { printf '%s [publish-dockerhub-readme] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 die() {
-    log "FAIL: $*"
-    exit 1
+	log "FAIL: $*"
+	exit 1
 }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -56,8 +56,8 @@ command -v python3 > /dev/null || die "python3 is required (used for safe JSON e
 
 log "requesting access token for $DOCKERHUB_USERNAME"
 TOKEN_RESPONSE="$(curl -fsS -X POST https://hub.docker.com/v2/auth/token \
-    -H 'Content-Type: application/json' \
-    -d "$(python3 -c '
+	-H 'Content-Type: application/json' \
+	-d "$(python3 -c '
 import json, os, sys
 json.dump({"identifier": os.environ["DOCKERHUB_USERNAME"], "secret": os.environ["DOCKERHUB_TOKEN"]}, sys.stdout)
 ')")" || die "login request failed"
@@ -88,15 +88,15 @@ json.dump({"full_description": text}, sys.stdout)
 
 log "publishing full_description to docker.io/$NAMESPACE/$REPOSITORY"
 HTTP_CODE="$(curl -sS -o /tmp/dockerhub-patch-response.json -w '%{http_code}' \
-    -X PATCH "https://hub.docker.com/v2/repositories/${NAMESPACE}/${REPOSITORY}/" \
-    -H "Authorization: Bearer ${ACCESS_TOKEN}" \
-    -H 'Content-Type: application/json' \
-    --data-binary @"$BODY_FILE")"
+	-X PATCH "https://hub.docker.com/v2/repositories/${NAMESPACE}/${REPOSITORY}/" \
+	-H "Authorization: Bearer ${ACCESS_TOKEN}" \
+	-H 'Content-Type: application/json' \
+	--data-binary @"$BODY_FILE")"
 
 if [ "$HTTP_CODE" != "200" ]; then
-    log "response body:"
-    cat /tmp/dockerhub-patch-response.json >&2 || true
-    die "PATCH returned HTTP $HTTP_CODE (expected 200)"
+	log "response body:"
+	cat /tmp/dockerhub-patch-response.json >&2 || true
+	die "PATCH returned HTTP $HTTP_CODE (expected 200)"
 fi
 
 rm -f /tmp/dockerhub-patch-response.json

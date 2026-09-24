@@ -27,17 +27,17 @@ source /usr/local/lib/log.sh
 source /usr/local/lib/model-config.sh
 
 die() {
-    log_error "$*"
-    exit 1
+	log_error "$*"
+	exit 1
 }
 
 MODEL_INDEX="${1:-}"
 SLUG=""
 if [ -n "$MODEL_INDEX" ]; then
-    [[ "$MODEL_INDEX" =~ ^[0-9]+$ ]] || die "invalid model index argument: $MODEL_INDEX"
-    SLUG="$(mc_model_slug "$MODEL_INDEX")"
-    [ -n "$SLUG" ] || die "no MODEL_${MODEL_INDEX}_SLUG found in environment (caller bug — model-config.sh should have validated this)"
-    LOG_COMPONENT="generate:$SLUG"
+	[[ "$MODEL_INDEX" =~ ^[0-9]+$ ]] || die "invalid model index argument: $MODEL_INDEX"
+	SLUG="$(mc_model_slug "$MODEL_INDEX")"
+	[ -n "$SLUG" ] || die "no MODEL_${MODEL_INDEX}_SLUG found in environment (caller bug — model-config.sh should have validated this)"
+	LOG_COMPONENT="generate:$SLUG"
 fi
 
 # Resolves <key> either from the per-model namespace (MODEL_<MODEL_INDEX>_<key>)
@@ -45,13 +45,13 @@ fi
 # every GIT_*/MODEL_*/GENERATION_TIMEOUT read below goes through this instead
 # of reading its variable directly.
 resolve_var() {
-    local key="$1" var
-    if [ -n "$MODEL_INDEX" ]; then
-        mc_model_var "$MODEL_INDEX" "$key"
-    else
-        var="$key"
-        printf '%s' "${!var:-}"
-    fi
+	local key="$1" var
+	if [ -n "$MODEL_INDEX" ]; then
+		mc_model_var "$MODEL_INDEX" "$key"
+	else
+		var="$key"
+		printf '%s' "${!var:-}"
+	fi
 }
 
 # --- Bound the whole run (git clone/fetch + Archi CLI) by GENERATION_TIMEOUT
@@ -63,8 +63,8 @@ resolve_var() {
 GENERATION_TIMEOUT="$(resolve_var GENERATION_TIMEOUT)"
 GENERATION_TIMEOUT="${GENERATION_TIMEOUT:-600}"
 if [ -z "${_GENERATE_SH_TIMEOUT_GUARD:-}" ]; then
-    export _GENERATE_SH_TIMEOUT_GUARD=1
-    exec timeout --kill-after=10 "$GENERATION_TIMEOUT" "$0" "$@"
+	export _GENERATE_SH_TIMEOUT_GUARD=1
+	exec timeout --kill-after=10 "$GENERATION_TIMEOUT" "$0" "$@"
 fi
 
 # --- Retry a command up to 3 times with exponential backoff (3s, 6s), for
@@ -73,38 +73,38 @@ fi
 # them apart would mean parsing stderr text, which is brittle. Worst case, an
 # auth failure costs an extra ~9s before the (still correct) final error. ---
 retry_cmd() {
-    local max_attempts=3 delay=3 attempt=1 rc
-    while true; do
-        "$@" && return 0
-        rc=$?
-        [ "$attempt" -ge "$max_attempts" ] && return "$rc"
-        log_warn "command failed (exit $rc, attempt $attempt/$max_attempts) — retrying in ${delay}s: $*"
-        sleep "$delay"
-        attempt=$((attempt + 1))
-        delay=$((delay * 2))
-    done
+	local max_attempts=3 delay=3 attempt=1 rc
+	while true; do
+		"$@" && return 0
+		rc=$?
+		[ "$attempt" -ge "$max_attempts" ] && return "$rc"
+		log_warn "command failed (exit $rc, attempt $attempt/$max_attempts) — retrying in ${delay}s: $*"
+		sleep "$delay"
+		attempt=$((attempt + 1))
+		delay=$((delay * 2))
+	done
 }
 
 urlencode() {
-    local s="$1" out="" c
-    local i
-    for ((i = 0; i < ${#s}; i++)); do
-        c="${s:i:1}"
-        case "$c" in
-            [a-zA-Z0-9.~_-]) out+="$c" ;;
-            *) out+=$(printf '%%%02X' "'$c") ;;
-        esac
-    done
-    printf '%s' "$out"
+	local s="$1" out="" c
+	local i
+	for ((i = 0; i < ${#s}; i++)); do
+		c="${s:i:1}"
+		case "$c" in
+			[a-zA-Z0-9.~_-]) out+="$c" ;;
+			*) out+=$(printf '%%%02X' "'$c") ;;
+		esac
+	done
+	printf '%s' "$out"
 }
 
 GIT_URL="$(resolve_var GIT_URL)"
 if [ -z "$GIT_URL" ]; then
-    if [ -n "$MODEL_INDEX" ]; then
-        die "MODEL_${MODEL_INDEX}_GIT_URL is required"
-    else
-        die "GIT_URL is required"
-    fi
+	if [ -n "$MODEL_INDEX" ]; then
+		die "MODEL_${MODEL_INDEX}_GIT_URL is required"
+	else
+		die "GIT_URL is required"
+	fi
 fi
 GIT_REF="$(resolve_var GIT_REF)"
 MODEL_PATH="$(resolve_var MODEL_PATH)"
@@ -117,20 +117,20 @@ MODEL_FORMAT="${MODEL_FORMAT:-auto}"
 # guarantees only one model is ever mid-generation at a time, so there's
 # never concurrent use of the scratch directory to worry about.
 if [ -n "$MODEL_INDEX" ]; then
-    REPO_DIR="/data/repo/$SLUG"
-    REPORT_DIR="/data/report/$SLUG"
-    SECRETS_DIR="/data/secrets/$SLUG"
+	REPO_DIR="/data/repo/$SLUG"
+	REPORT_DIR="/data/report/$SLUG"
+	SECRETS_DIR="/data/secrets/$SLUG"
 else
-    REPO_DIR="/data/repo"
-    REPORT_DIR="/data/report"
-    SECRETS_DIR="/data/secrets"
+	REPO_DIR="/data/repo"
+	REPORT_DIR="/data/report"
+	SECRETS_DIR="/data/secrets"
 fi
 REPORT_TMP_DIR="/data/report.new"
 REPORT_THEME_DIR="/opt/report-theme"
 
 case "$MODEL_FORMAT" in
-    auto | plain | coarchi) ;;
-    *) die "MODEL_FORMAT must be one of: auto, plain, coarchi (got: $MODEL_FORMAT)" ;;
+	auto | plain | coarchi) ;;
+	*) die "MODEL_FORMAT must be one of: auto, plain, coarchi (got: $MODEL_FORMAT)" ;;
 esac
 
 # --- Resolve auth vars (per-model in multi-model mode) ---
@@ -145,7 +145,7 @@ AUTH_METHODS=0
 [ -n "${GIT_TOKEN:-}" ] && AUTH_METHODS=$((AUTH_METHODS + 1))
 [ -n "${GIT_SSH_PRIVATE_KEY:-}" ] && AUTH_METHODS=$((AUTH_METHODS + 1))
 if [ -n "${GIT_USERNAME:-}" ] || [ -n "${GIT_PASSWORD:-}" ]; then
-    AUTH_METHODS=$((AUTH_METHODS + 1))
+	AUTH_METHODS=$((AUTH_METHODS + 1))
 fi
 [ "$AUTH_METHODS" -le 1 ] || die "set at most one auth method: GIT_TOKEN, GIT_SSH_PRIVATE_KEY, or GIT_USERNAME+GIT_PASSWORD"
 
@@ -157,74 +157,74 @@ mkdir -p "$SECRETS_DIR"
 chmod 700 "$SECRETS_DIR"
 
 if [ -n "${GIT_TOKEN:-}" ]; then
-    case "$GIT_URL" in
-        https://*)
-            CLONE_URL="https://${GIT_TOKEN}@${GIT_URL#https://}"
-            ;;
-        *)
-            die "GIT_TOKEN is set but GIT_URL is not an https:// URL (got: $GIT_URL)"
-            ;;
-    esac
+	case "$GIT_URL" in
+		https://*)
+			CLONE_URL="https://${GIT_TOKEN}@${GIT_URL#https://}"
+			;;
+		*)
+			die "GIT_TOKEN is set but GIT_URL is not an https:// URL (got: $GIT_URL)"
+			;;
+	esac
 elif [ -n "${GIT_USERNAME:-}" ] || [ -n "${GIT_PASSWORD:-}" ]; then
-    [ -n "${GIT_USERNAME:-}" ] || die "GIT_PASSWORD is set but GIT_USERNAME is missing"
-    [ -n "${GIT_PASSWORD:-}" ] || die "GIT_USERNAME is set but GIT_PASSWORD is missing"
-    case "$GIT_URL" in
-        https://*)
-            ENC_USER=$(urlencode "$GIT_USERNAME")
-            ENC_PASS=$(urlencode "$GIT_PASSWORD")
-            CLONE_URL="https://${ENC_USER}:${ENC_PASS}@${GIT_URL#https://}"
-            ;;
-        *)
-            die "GIT_USERNAME/GIT_PASSWORD are set but GIT_URL is not an https:// URL (got: $GIT_URL)"
-            ;;
-    esac
+	[ -n "${GIT_USERNAME:-}" ] || die "GIT_PASSWORD is set but GIT_USERNAME is missing"
+	[ -n "${GIT_PASSWORD:-}" ] || die "GIT_USERNAME is set but GIT_PASSWORD is missing"
+	case "$GIT_URL" in
+		https://*)
+			ENC_USER=$(urlencode "$GIT_USERNAME")
+			ENC_PASS=$(urlencode "$GIT_PASSWORD")
+			CLONE_URL="https://${ENC_USER}:${ENC_PASS}@${GIT_URL#https://}"
+			;;
+		*)
+			die "GIT_USERNAME/GIT_PASSWORD are set but GIT_URL is not an https:// URL (got: $GIT_URL)"
+			;;
+	esac
 elif [ -n "${GIT_SSH_PRIVATE_KEY:-}" ]; then
-    case "$GIT_URL" in
-        ssh://* | *@*:*) ;;
-        *) die "GIT_SSH_PRIVATE_KEY is set but GIT_URL doesn't look like an SSH URL (got: $GIT_URL)" ;;
-    esac
-    KEY_FILE="$SECRETS_DIR/id_ssh"
-    # Accept either a raw multi-line PEM or a base64-encoded blob.
-    if printf '%s' "$GIT_SSH_PRIVATE_KEY" | grep -q '^-----BEGIN'; then
-        printf '%s\n' "$GIT_SSH_PRIVATE_KEY" > "$KEY_FILE"
-    else
-        printf '%s' "$GIT_SSH_PRIVATE_KEY" | base64 -d > "$KEY_FILE"
-    fi
-    chmod 600 "$KEY_FILE"
+	case "$GIT_URL" in
+		ssh://* | *@*:*) ;;
+		*) die "GIT_SSH_PRIVATE_KEY is set but GIT_URL doesn't look like an SSH URL (got: $GIT_URL)" ;;
+	esac
+	KEY_FILE="$SECRETS_DIR/id_ssh"
+	# Accept either a raw multi-line PEM or a base64-encoded blob.
+	if printf '%s' "$GIT_SSH_PRIVATE_KEY" | grep -q '^-----BEGIN'; then
+		printf '%s\n' "$GIT_SSH_PRIVATE_KEY" > "$KEY_FILE"
+	else
+		printf '%s' "$GIT_SSH_PRIVATE_KEY" | base64 -d > "$KEY_FILE"
+	fi
+	chmod 600 "$KEY_FILE"
 
-    SSH_OPTS="-i $KEY_FILE -o IdentitiesOnly=yes"
-    if [ -n "${GIT_SSH_KNOWN_HOSTS:-}" ]; then
-        KNOWN_HOSTS_FILE="$SECRETS_DIR/known_hosts"
-        printf '%s\n' "$GIT_SSH_KNOWN_HOSTS" > "$KNOWN_HOSTS_FILE"
-        chmod 600 "$KNOWN_HOSTS_FILE"
-        SSH_OPTS="$SSH_OPTS -o UserKnownHostsFile=$KNOWN_HOSTS_FILE -o StrictHostKeyChecking=yes"
-    else
-        log_warn "GIT_SSH_KNOWN_HOSTS not set — using StrictHostKeyChecking=accept-new (TOFU, no pinned host key)"
-        SSH_OPTS="$SSH_OPTS -o UserKnownHostsFile=$SECRETS_DIR/known_hosts -o StrictHostKeyChecking=accept-new"
-    fi
-    export GIT_SSH_COMMAND="ssh $SSH_OPTS"
+	SSH_OPTS="-i $KEY_FILE -o IdentitiesOnly=yes"
+	if [ -n "${GIT_SSH_KNOWN_HOSTS:-}" ]; then
+		KNOWN_HOSTS_FILE="$SECRETS_DIR/known_hosts"
+		printf '%s\n' "$GIT_SSH_KNOWN_HOSTS" > "$KNOWN_HOSTS_FILE"
+		chmod 600 "$KNOWN_HOSTS_FILE"
+		SSH_OPTS="$SSH_OPTS -o UserKnownHostsFile=$KNOWN_HOSTS_FILE -o StrictHostKeyChecking=yes"
+	else
+		log_warn "GIT_SSH_KNOWN_HOSTS not set — using StrictHostKeyChecking=accept-new (TOFU, no pinned host key)"
+		SSH_OPTS="$SSH_OPTS -o UserKnownHostsFile=$SECRETS_DIR/known_hosts -o StrictHostKeyChecking=accept-new"
+	fi
+	export GIT_SSH_COMMAND="ssh $SSH_OPTS"
 fi
 
 git config --global advice.detachedHead false
 
 if [ -d "$REPO_DIR/.git" ]; then
-    log_info "updating existing clone in $REPO_DIR"
-    git -C "$REPO_DIR" remote set-url origin "$CLONE_URL"
-    retry_cmd git -C "$REPO_DIR" fetch --depth 1 origin "${GIT_REF:-HEAD}"
-    git -C "$REPO_DIR" reset --hard FETCH_HEAD
+	log_info "updating existing clone in $REPO_DIR"
+	git -C "$REPO_DIR" remote set-url origin "$CLONE_URL"
+	retry_cmd git -C "$REPO_DIR" fetch --depth 1 origin "${GIT_REF:-HEAD}"
+	git -C "$REPO_DIR" reset --hard FETCH_HEAD
 else
-    log_info "cloning $GIT_URL into $REPO_DIR"
-    clone_once() {
-        # A failed clone can leave a partial $REPO_DIR behind — wipe it before
-        # every attempt (including the first) so retries start clean.
-        rm -rf "$REPO_DIR"
-        if [ -n "$GIT_REF" ]; then
-            git clone --depth 1 --branch "$GIT_REF" "$CLONE_URL" "$REPO_DIR"
-        else
-            git clone --depth 1 "$CLONE_URL" "$REPO_DIR"
-        fi
-    }
-    retry_cmd clone_once
+	log_info "cloning $GIT_URL into $REPO_DIR"
+	clone_once() {
+		# A failed clone can leave a partial $REPO_DIR behind — wipe it before
+		# every attempt (including the first) so retries start clean.
+		rm -rf "$REPO_DIR"
+		if [ -n "$GIT_REF" ]; then
+			git clone --depth 1 --branch "$GIT_REF" "$CLONE_URL" "$REPO_DIR"
+		else
+			git clone --depth 1 "$CLONE_URL" "$REPO_DIR"
+		fi
+	}
+	retry_cmd clone_once
 fi
 
 # --- Locate the model and decide plain vs coArchi ---
@@ -239,21 +239,21 @@ fi
 # "java.io.IOException: Model was not found at <repo>/model" (it was actually
 # looking for <repo>/model/model/folder.xml).
 find_coarchi_dir() {
-    # Prints the directory containing "model/folder.xml" whose root element
-    # is <archimate:ArchimateModel ...> (i.e. the coArchi repo root, the
-    # parent of the matched folder.xml's "model" parent), or nothing if none
-    # found.
-    local f dir parent
-    while IFS= read -r f; do
-        dir="$(dirname "$f")"
-        [ "$(basename "$dir")" = "model" ] || continue
-        if head -c 4096 "$f" | grep -q '<archimate:ArchimateModel'; then
-            parent="$(dirname "$dir")"
-            printf '%s\n' "$parent"
-            return 0
-        fi
-    done < <(find "$REPO_DIR" -name 'folder.xml' -not -path '*/.git/*' | sort)
-    return 1
+	# Prints the directory containing "model/folder.xml" whose root element
+	# is <archimate:ArchimateModel ...> (i.e. the coArchi repo root, the
+	# parent of the matched folder.xml's "model" parent), or nothing if none
+	# found.
+	local f dir parent
+	while IFS= read -r f; do
+		dir="$(dirname "$f")"
+		[ "$(basename "$dir")" = "model" ] || continue
+		if head -c 4096 "$f" | grep -q '<archimate:ArchimateModel'; then
+			parent="$(dirname "$dir")"
+			printf '%s\n' "$parent"
+			return 0
+		fi
+	done < <(find "$REPO_DIR" -name 'folder.xml' -not -path '*/.git/*' | sort)
+	return 1
 }
 
 MODEL_MODE="" # plain | coarchi
@@ -261,64 +261,64 @@ MODEL_FILE="" # set for plain
 MODEL_DIR=""  # set for coarchi
 
 if [ -n "$MODEL_PATH" ]; then
-    CANDIDATE="$REPO_DIR/$MODEL_PATH"
-    if [ "$MODEL_FORMAT" = "coarchi" ]; then
-        # MODEL_PATH for coarchi is the repo root that CONTAINS "model/", not
-        # the model/ directory itself (see find_coarchi_dir comment above).
-        [ -d "$CANDIDATE" ] || die "MODEL_FORMAT=coarchi but MODEL_PATH is not a directory: $CANDIDATE"
-        [ -f "$CANDIDATE/model/folder.xml" ] || die "MODEL_FORMAT=coarchi but $CANDIDATE/model/folder.xml is missing (MODEL_PATH must point at the repo root containing model/, not at model/ itself)"
-        MODEL_MODE="coarchi"
-        MODEL_DIR="$CANDIDATE"
-    elif [ "$MODEL_FORMAT" = "plain" ]; then
-        [ -f "$CANDIDATE" ] || die "MODEL_FORMAT=plain but MODEL_PATH is not a file: $CANDIDATE"
-        MODEL_MODE="plain"
-        MODEL_FILE="$CANDIDATE"
-    else
-        # auto: infer from whether MODEL_PATH points at a file or a directory.
-        # For a directory, be forgiving of MODEL_PATH pointing at either the
-        # coArchi repo root or straight at its model/ subdirectory.
-        if [ -f "$CANDIDATE" ]; then
-            MODEL_MODE="plain"
-            MODEL_FILE="$CANDIDATE"
-        elif [ -f "$CANDIDATE/model/folder.xml" ]; then
-            MODEL_MODE="coarchi"
-            MODEL_DIR="$CANDIDATE"
-        elif [ "$(basename "$CANDIDATE")" = "model" ] && [ -f "$CANDIDATE/folder.xml" ]; then
-            MODEL_MODE="coarchi"
-            MODEL_DIR="$(dirname "$CANDIDATE")"
-        elif [ -d "$CANDIDATE" ]; then
-            die "MODEL_PATH is a directory but no model/folder.xml found under it: $CANDIDATE"
-        else
-            die "MODEL_PATH not found: $CANDIDATE"
-        fi
-    fi
+	CANDIDATE="$REPO_DIR/$MODEL_PATH"
+	if [ "$MODEL_FORMAT" = "coarchi" ]; then
+		# MODEL_PATH for coarchi is the repo root that CONTAINS "model/", not
+		# the model/ directory itself (see find_coarchi_dir comment above).
+		[ -d "$CANDIDATE" ] || die "MODEL_FORMAT=coarchi but MODEL_PATH is not a directory: $CANDIDATE"
+		[ -f "$CANDIDATE/model/folder.xml" ] || die "MODEL_FORMAT=coarchi but $CANDIDATE/model/folder.xml is missing (MODEL_PATH must point at the repo root containing model/, not at model/ itself)"
+		MODEL_MODE="coarchi"
+		MODEL_DIR="$CANDIDATE"
+	elif [ "$MODEL_FORMAT" = "plain" ]; then
+		[ -f "$CANDIDATE" ] || die "MODEL_FORMAT=plain but MODEL_PATH is not a file: $CANDIDATE"
+		MODEL_MODE="plain"
+		MODEL_FILE="$CANDIDATE"
+	else
+		# auto: infer from whether MODEL_PATH points at a file or a directory.
+		# For a directory, be forgiving of MODEL_PATH pointing at either the
+		# coArchi repo root or straight at its model/ subdirectory.
+		if [ -f "$CANDIDATE" ]; then
+			MODEL_MODE="plain"
+			MODEL_FILE="$CANDIDATE"
+		elif [ -f "$CANDIDATE/model/folder.xml" ]; then
+			MODEL_MODE="coarchi"
+			MODEL_DIR="$CANDIDATE"
+		elif [ "$(basename "$CANDIDATE")" = "model" ] && [ -f "$CANDIDATE/folder.xml" ]; then
+			MODEL_MODE="coarchi"
+			MODEL_DIR="$(dirname "$CANDIDATE")"
+		elif [ -d "$CANDIDATE" ]; then
+			die "MODEL_PATH is a directory but no model/folder.xml found under it: $CANDIDATE"
+		else
+			die "MODEL_PATH not found: $CANDIDATE"
+		fi
+	fi
 else
-    if [ "$MODEL_FORMAT" != "coarchi" ]; then
-        mapfile -t PLAIN_CANDIDATES < <(find "$REPO_DIR" -name '*.archimate' -not -path '*/.git/*' | sort)
-    else
-        PLAIN_CANDIDATES=()
-    fi
+	if [ "$MODEL_FORMAT" != "coarchi" ]; then
+		mapfile -t PLAIN_CANDIDATES < <(find "$REPO_DIR" -name '*.archimate' -not -path '*/.git/*' | sort)
+	else
+		PLAIN_CANDIDATES=()
+	fi
 
-    case "${#PLAIN_CANDIDATES[@]}" in
-        1)
-            MODEL_MODE="plain"
-            MODEL_FILE="${PLAIN_CANDIDATES[0]}"
-            ;;
-        0)
-            if [ "$MODEL_FORMAT" = "plain" ]; then
-                die "MODEL_FORMAT=plain but no *.archimate file found in repo"
-            fi
-            if COARCHI_DIR=$(find_coarchi_dir); then
-                MODEL_MODE="coarchi"
-                MODEL_DIR="$COARCHI_DIR"
-            else
-                die "no *.archimate file and no coArchi folder.xml found in repo; set MODEL_PATH explicitly"
-            fi
-            ;;
-        *)
-            die "multiple *.archimate files found, set MODEL_PATH to disambiguate: ${PLAIN_CANDIDATES[*]}"
-            ;;
-    esac
+	case "${#PLAIN_CANDIDATES[@]}" in
+		1)
+			MODEL_MODE="plain"
+			MODEL_FILE="${PLAIN_CANDIDATES[0]}"
+			;;
+		0)
+			if [ "$MODEL_FORMAT" = "plain" ]; then
+				die "MODEL_FORMAT=plain but no *.archimate file found in repo"
+			fi
+			if COARCHI_DIR=$(find_coarchi_dir); then
+				MODEL_MODE="coarchi"
+				MODEL_DIR="$COARCHI_DIR"
+			else
+				die "no *.archimate file and no coArchi folder.xml found in repo; set MODEL_PATH explicitly"
+			fi
+			;;
+		*)
+			die "multiple *.archimate files found, set MODEL_PATH to disambiguate: ${PLAIN_CANDIDATES[*]}"
+			;;
+	esac
 fi
 
 # --- Generate into a scratch dir; published to REPORT_DIR further down ---
@@ -326,19 +326,19 @@ rm -rf "$REPORT_TMP_DIR"
 mkdir -p "$REPORT_TMP_DIR"
 
 if [ "$MODEL_MODE" = "plain" ]; then
-    log_info "using plain model file: $MODEL_FILE"
-    xvfb-run -a /opt/archi/Archi -consoleLog -nosplash \
-        -application com.archimatetool.commandline.app \
-        --loadModel "$MODEL_FILE" \
-        --html.createReport "$REPORT_TMP_DIR" \
-        1>&2
+	log_info "using plain model file: $MODEL_FILE"
+	xvfb-run -a /opt/archi/Archi -consoleLog -nosplash \
+		-application com.archimatetool.commandline.app \
+		--loadModel "$MODEL_FILE" \
+		--html.createReport "$REPORT_TMP_DIR" \
+		1>&2
 else
-    log_info "using coArchi model directory: $MODEL_DIR"
-    xvfb-run -a /opt/archi/Archi -consoleLog -nosplash \
-        -application com.archimatetool.commandline.app \
-        --modelrepository.loadModel "$MODEL_DIR" \
-        --html.createReport "$REPORT_TMP_DIR" \
-        1>&2
+	log_info "using coArchi model directory: $MODEL_DIR"
+	xvfb-run -a /opt/archi/Archi -consoleLog -nosplash \
+		-application com.archimatetool.commandline.app \
+		--modelrepository.loadModel "$MODEL_DIR" \
+		--html.createReport "$REPORT_TMP_DIR" \
+		1>&2
 fi
 
 [ -f "$REPORT_TMP_DIR/index.html" ] || die "generation finished but $REPORT_TMP_DIR/index.html is missing"
@@ -352,10 +352,10 @@ fi
 # explicit <link> tags with the extra PNG sizes on top, for browsers/OSes that
 # prefer those over the bare .ico.
 if [ -d "$REPORT_THEME_DIR/favicon" ]; then
-    cp -f "$REPORT_THEME_DIR"/favicon/*.ico "$REPORT_THEME_DIR"/favicon/*.png "$REPORT_TMP_DIR/" \
-        || die "failed to copy favicon files"
+	cp -f "$REPORT_THEME_DIR"/favicon/*.ico "$REPORT_THEME_DIR"/favicon/*.png "$REPORT_TMP_DIR/" \
+		|| die "failed to copy favicon files"
 else
-    log_warn "$REPORT_THEME_DIR/favicon not found, report will have no favicon"
+	log_warn "$REPORT_THEME_DIR/favicon not found, report will have no favicon"
 fi
 
 # Overlay our RU/EN + light/dark theme on top of Archi's stock report assets.
@@ -370,29 +370,29 @@ fi
 # stock, unmodified report - e.g. if they don't trust/want the vendored
 # marked.js, or just prefer the original look.
 case "${USE_MODERN_CSS:-true}" in
-    true)
-        USE_MODERN_CSS=true
-        ;;
-    false)
-        log_info "USE_MODERN_CSS=false, serving Archi's stock (unthemed) report"
-        USE_MODERN_CSS=false
-        ;;
-    *) die "USE_MODERN_CSS must be true or false, got: ${USE_MODERN_CSS}" ;;
+	true)
+		USE_MODERN_CSS=true
+		;;
+	false)
+		log_info "USE_MODERN_CSS=false, serving Archi's stock (unthemed) report"
+		USE_MODERN_CSS=false
+		;;
+	*) die "USE_MODERN_CSS must be true or false, got: ${USE_MODERN_CSS}" ;;
 esac
 
 if [ "$USE_MODERN_CSS" = "true" ]; then
-    if [ -d "$REPORT_THEME_DIR" ]; then
-        log_info "applying report theme from $REPORT_THEME_DIR"
-        cp -f "$REPORT_THEME_DIR/css/model.css" "$REPORT_TMP_DIR/css/model.css" || die "failed to apply report theme (css/model.css)"
-        cp -f "$REPORT_THEME_DIR/css/i18n.css" "$REPORT_TMP_DIR/css/i18n.css" || die "failed to apply report theme (css/i18n.css)"
-        mkdir -p "$REPORT_TMP_DIR/css/i18n"
-        cp -f "$REPORT_THEME_DIR/css/i18n/en.css" "$REPORT_TMP_DIR/css/i18n/en.css" || die "failed to apply report theme (css/i18n/en.css)"
-        cp -f "$REPORT_THEME_DIR/css/i18n/ru.css" "$REPORT_TMP_DIR/css/i18n/ru.css" || die "failed to apply report theme (css/i18n/ru.css)"
-        cp -f "$REPORT_THEME_DIR/js/model.js" "$REPORT_TMP_DIR/js/model.js" || die "failed to apply report theme (js/model.js)"
-        cp -f "$REPORT_THEME_DIR/js/frame.js" "$REPORT_TMP_DIR/js/frame.js" || die "failed to apply report theme (js/frame.js)"
-    else
-        log_warn "$REPORT_THEME_DIR not found, serving Archi's stock (unthemed) report"
-    fi
+	if [ -d "$REPORT_THEME_DIR" ]; then
+		log_info "applying report theme from $REPORT_THEME_DIR"
+		cp -f "$REPORT_THEME_DIR/css/model.css" "$REPORT_TMP_DIR/css/model.css" || die "failed to apply report theme (css/model.css)"
+		cp -f "$REPORT_THEME_DIR/css/i18n.css" "$REPORT_TMP_DIR/css/i18n.css" || die "failed to apply report theme (css/i18n.css)"
+		mkdir -p "$REPORT_TMP_DIR/css/i18n"
+		cp -f "$REPORT_THEME_DIR/css/i18n/en.css" "$REPORT_TMP_DIR/css/i18n/en.css" || die "failed to apply report theme (css/i18n/en.css)"
+		cp -f "$REPORT_THEME_DIR/css/i18n/ru.css" "$REPORT_TMP_DIR/css/i18n/ru.css" || die "failed to apply report theme (css/i18n/ru.css)"
+		cp -f "$REPORT_THEME_DIR/js/model.js" "$REPORT_TMP_DIR/js/model.js" || die "failed to apply report theme (js/model.js)"
+		cp -f "$REPORT_THEME_DIR/js/frame.js" "$REPORT_TMP_DIR/js/frame.js" || die "failed to apply report theme (js/frame.js)"
+	else
+		log_warn "$REPORT_THEME_DIR not found, serving Archi's stock (unthemed) report"
+	fi
 fi
 
 # Publish by replacing REPORT_DIR's *contents*, not the directory itself.

@@ -12,13 +12,13 @@
 # called from outside this file.
 
 _log_level_num() {
-    case "$1" in
-        DEBUG) echo 10 ;;
-        INFO) echo 20 ;;
-        WARNING) echo 30 ;;
-        ERROR) echo 40 ;;
-        *) echo 20 ;; # unreachable once LOG_LEVEL itself is validated below
-    esac
+	case "$1" in
+		DEBUG) echo 10 ;;
+		INFO) echo 20 ;;
+		WARNING) echo 30 ;;
+		ERROR) echo 40 ;;
+		*) echo 20 ;; # unreachable once LOG_LEVEL itself is validated below
+	esac
 }
 
 # Validated once, at source time, in every process that sources this file —
@@ -26,20 +26,20 @@ _log_level_num() {
 # same pattern as WEBHOOK_PROVIDER validation in webhook/main.go.
 LOG_LEVEL="${LOG_LEVEL:-INFO}"
 case "$LOG_LEVEL" in
-    DEBUG | INFO | WARNING | ERROR) ;;
-    *)
-        printf '%s [log] ERROR LOG_LEVEL must be one of DEBUG, INFO, WARNING, ERROR, got: %s\n' \
-            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$LOG_LEVEL" >&2
-        exit 1
-        ;;
+	DEBUG | INFO | WARNING | ERROR) ;;
+	*)
+		printf '%s [log] ERROR LOG_LEVEL must be one of DEBUG, INFO, WARNING, ERROR, got: %s\n' \
+			"$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$LOG_LEVEL" >&2
+		exit 1
+		;;
 esac
 _LOG_THRESHOLD="$(_log_level_num "$LOG_LEVEL")"
 
 _log_at() {
-    local level="$1"
-    shift
-    [ "$(_log_level_num "$level")" -ge "$_LOG_THRESHOLD" ] || return 0
-    printf '%s [%s] %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${LOG_COMPONENT:-?}" "$level" "$*" >&2
+	local level="$1"
+	shift
+	[ "$(_log_level_num "$level")" -ge "$_LOG_THRESHOLD" ] || return 0
+	printf '%s [%s] %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${LOG_COMPONENT:-?}" "$level" "$*" >&2
 }
 
 log_debug() { _log_at DEBUG "$@"; }

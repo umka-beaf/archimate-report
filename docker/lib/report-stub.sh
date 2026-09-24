@@ -16,11 +16,11 @@
 # generate.sh copies into real reports, see REPORT_THEME_DIR there) so a
 # stub page doesn't look unfinished/broken in a browser tab.
 mc_publish_stub() {
-    local dir="$1" title="$2" body_html="$3"
-    local theme_dir="${REPORT_THEME_DIR:-/opt/report-theme}"
+	local dir="$1" title="$2" body_html="$3"
+	local theme_dir="${REPORT_THEME_DIR:-/opt/report-theme}"
 
-    mkdir -p "$dir"
-    cat > "$dir/index.html" << HTML
+	mkdir -p "$dir"
+	cat > "$dir/index.html" << HTML
 <!doctype html>
 <html lang="en">
 <head>
@@ -42,7 +42,7 @@ $body_html
 </html>
 HTML
 
-    if [ -d "$theme_dir/favicon" ]; then
-        cp -f "$theme_dir"/favicon/*.ico "$theme_dir"/favicon/*.png "$dir/" 2> /dev/null || true
-    fi
+	if [ -d "$theme_dir/favicon" ]; then
+		cp -f "$theme_dir"/favicon/*.ico "$theme_dir"/favicon/*.png "$dir/" 2> /dev/null || true
+	fi
 }
