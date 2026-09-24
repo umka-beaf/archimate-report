@@ -12,5 +12,8 @@
 # ships in git).
 /CLAUDE.md
 
+# Local codebase-memory MCP index artifact
+/.codebase-memory/
+
 # Misc
 .DS_Store
