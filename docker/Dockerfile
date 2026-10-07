@@ -35,35 +35,29 @@ RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends ca-certificates curl tar; \
     rm -rf /var/lib/apt/lists/*; \
-    ARCHI_TAG=""; \
+    # archi.io's release *tag* has flip-flopped conventions release to
+    # release - dotted (e.g. "5.10.0"), fully underscored (e.g. "5_9_0"), a
+    # mixed form (e.g. "5.10_0"), and now one missing the patch digit
+    # entirely (e.g. "5.10") - and old releases can simply be pruned outright
+    # once a new one ships, so a pinned ARCHI_VERSION can't be turned into a
+    # tag by guessing a shape either. The release's "name" field has stayed
+    # the full dotted version throughout (matching the asset filename, e.g.
+    # "Archi-Linux64-5.10.0.tgz"), so resolve the real tag_name by looking a
+    # release up by its "name" instead of assuming any relationship between
+    # the two. \
     if [ "$ARCHI_VERSION" = "latest" ]; then \
-        LATEST_JSON=$(curl -fsSL https://api.github.com/repos/archimatetool/archi.io/releases/latest); \
-        ARCHI_TAG=$(printf '%s' "$LATEST_JSON" | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/'); \
-        # archi.io has flip-flopped release *tag* conventions across releases -
-        # dotted (e.g. "5.10.0"), fully underscored (e.g. "5_9_0"), a mixed
-        # form (e.g. "5.10_0"), and now a truncated form missing the patch
-        # digit entirely (e.g. "5.10") - while the human-readable release
-        # "name" field and the asset *filename* have stayed dotted and
-        # complete (e.g. "Archi-Linux64-5.10.0.tgz"). Read ARCHI_VERSION from
-        # "name" (used below for the persisted .archi_version file and the
-        # filename), not from the tag - normalizing/trusting the tag for the
-        # version number is what breaks once the tag drops the patch digit.
-        # Keep the raw, un-normalized $ARCHI_TAG around too and try it first
-        # when building the download URL below, since that's the only part
-        # of the tag that still needs to match whatever convention is live.
-        ARCHI_VERSION=$(printf '%s' "$LATEST_JSON" | grep -m1 '"name"' | sed -E 's/.*"name": *"([^"]+)".*/\1/'); \
+        RELEASE_JSON=$(curl -fsSL https://api.github.com/repos/archimatetool/archi.io/releases/latest); \
+        ARCHI_TAG=$(printf '%s' "$RELEASE_JSON" | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/'); \
+        ARCHI_VERSION=$(printf '%s' "$RELEASE_JSON" | grep -m1 '"name"' | sed -E 's/.*"name": *"([^"]+)".*/\1/'); \
+    else \
+        ARCHI_TAG=$(curl -fsSL "https://api.github.com/repos/archimatetool/archi.io/releases?per_page=100" \
+          | awk -v want="\"name\": \"${ARCHI_VERSION}\"" '/"tag_name"/ { tag = $0 } index($0, want) { print tag; exit }' \
+          | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/'); \
+        [ -n "$ARCHI_TAG" ] || { echo "ERROR: no archi.io release found with name \"${ARCHI_VERSION}\"" >&2; exit 1; }; \
     fi; \
-    echo "Resolved ARCHI_VERSION=${ARCHI_VERSION}"; \
-    # Try, in order: the raw release tag as reported by the API (handles any
-    # convention, including a mixed one - only known when ARCHI_VERSION was
-    # "latest"), then the fully dotted tag, then the fully underscored tag -
-    # see the tag-convention note above.
-    { [ -n "$ARCHI_TAG" ] && curl -fsSL -o /tmp/archi.tgz \
-      "https://github.com/archimatetool/archi.io/releases/download/${ARCHI_TAG}/Archi-Linux64-${ARCHI_VERSION}.tgz"; } \
-      || curl -fsSL -o /tmp/archi.tgz \
-      "https://github.com/archimatetool/archi.io/releases/download/${ARCHI_VERSION}/Archi-Linux64-${ARCHI_VERSION}.tgz" \
-      || curl -fsSL -o /tmp/archi.tgz \
-      "https://github.com/archimatetool/archi.io/releases/download/$(printf '%s' "$ARCHI_VERSION" | tr '.' '_')/Archi-Linux64-${ARCHI_VERSION}.tgz"; \
+    echo "Resolved ARCHI_VERSION=${ARCHI_VERSION} (tag ${ARCHI_TAG})"; \
+    curl -fsSL -o /tmp/archi.tgz \
+      "https://github.com/archimatetool/archi.io/releases/download/${ARCHI_TAG}/Archi-Linux64-${ARCHI_VERSION}.tgz"; \
     mkdir -p /opt/archi; \
     tar -xzf /tmp/archi.tgz -C /opt/archi --strip-components=1; \
     rm -f /tmp/archi.tgz; \
