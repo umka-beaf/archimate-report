@@ -64,12 +64,15 @@ RUN set -eux; \
     chmod +x /opt/archi/Archi; \
     echo "${ARCHI_VERSION}" > /opt/archi/.archi_version
 
-# Floating 3.x tag (not a pinned patch version, e.g. not 3.9.9) for the same
-# reason as golang:1-alpine above — Maven itself has no compatibility
-# requirement here, only the JDK major version (21) matters for building
-# Archi, so there's nothing gained by pinning the Maven patch version by
-# hand. Same layer-cache caveat as ARCHI_VERSION=latest applies.
-FROM maven:3-eclipse-temurin-21 AS archi-linux-arm64
+# Pinned to the 3.9.x line, unlike golang:1-alpine above - Maven 3.10.0
+# bundles Maven Resolver 2.x, which validates artifact classifiers more
+# strictly and rejects the "/"-containing classifier Tycho uses for
+# system-scoped dependencies injected from a bundle's Bundle-ClassPath
+# (e.g. "lib/autolink-0.12.0.jar" from com.archimatetool.markdown, new in
+# Archi 5.10.0) - a known, unfixed Tycho bug (eclipse-tycho/tycho#6399).
+# Maven 3.9.x predates that resolver and isn't affected. Re-check this pin
+# once that issue ships a fix.
+FROM maven:3.9-eclipse-temurin-21 AS archi-linux-arm64
 
 # Same resolution semantics as archi-linux-amd64 above, but the source repo
 # (archimatetool/archi) tags releases as "release_<version>", not the bare
