@@ -40,15 +40,18 @@ RUN set -eux; \
         LATEST_JSON=$(curl -fsSL https://api.github.com/repos/archimatetool/archi.io/releases/latest); \
         ARCHI_TAG=$(printf '%s' "$LATEST_JSON" | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/'); \
         # archi.io has flip-flopped release *tag* conventions across releases -
-        # dotted (e.g. "5.10.0"), fully underscored (e.g. "5_9_0"), and even a
-        # mixed form (e.g. "5.10_0") - while the asset *filename* has always
-        # stayed dotted (e.g. "Archi-Linux64-5.10.0.tgz"). Normalize to dots for
-        # ARCHI_VERSION (used below for the persisted .archi_version file and
-        # the filename) so it stays in the dotted form the rest of this
-        # project/README assumes, but keep the raw, un-normalized $ARCHI_TAG
-        # around too and try it first when building the download URL below -
-        # normalizing it away is what breaks on a mixed tag like "5.10_0".
-        ARCHI_VERSION=$(printf '%s' "$ARCHI_TAG" | tr '_' '.'); \
+        # dotted (e.g. "5.10.0"), fully underscored (e.g. "5_9_0"), a mixed
+        # form (e.g. "5.10_0"), and now a truncated form missing the patch
+        # digit entirely (e.g. "5.10") - while the human-readable release
+        # "name" field and the asset *filename* have stayed dotted and
+        # complete (e.g. "Archi-Linux64-5.10.0.tgz"). Read ARCHI_VERSION from
+        # "name" (used below for the persisted .archi_version file and the
+        # filename), not from the tag - normalizing/trusting the tag for the
+        # version number is what breaks once the tag drops the patch digit.
+        # Keep the raw, un-normalized $ARCHI_TAG around too and try it first
+        # when building the download URL below, since that's the only part
+        # of the tag that still needs to match whatever convention is live.
+        ARCHI_VERSION=$(printf '%s' "$LATEST_JSON" | grep -m1 '"name"' | sed -E 's/.*"name": *"([^"]+)".*/\1/'); \
     fi; \
     echo "Resolved ARCHI_VERSION=${ARCHI_VERSION}"; \
     # Try, in order: the raw release tag as reported by the API (handles any

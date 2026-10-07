@@ -281,11 +281,17 @@ html.frame > body {
 
 .root-panel {
 	background: var(--arc-surface);
+	border-color: var(--arc-border);
 	box-shadow: var(--arc-shadow);
 	border-radius: 10px;
 }
 
-.root-panel-heading {
+/* Bootstrap's own .panel-default > .panel-heading rule (2 classes) outranks
+   a plain .root-panel-heading (1 class) regardless of stylesheet order, so
+   this needs the matching two-selector form (not just !important) to
+   actually win - otherwise every panel header (model tree, view, element
+   detail) stays stuck on Bootstrap's light background in dark mode. */
+.panel-default > .root-panel-heading {
 	background: var(--arc-surface-alt);
 	border-bottom: 1px solid var(--arc-border);
 	color: var(--arc-text);
@@ -379,7 +385,15 @@ img.diagram {
 	box-sizing: border-box;
 }
 
-/* Search box (adjust to theme) */
+/* Search box (adjust to theme). Bootstrap's .form-control sets its own
+   background/color/border at rest, not just on :focus - style the resting
+   state too, or the box stays stuck on Bootstrap's white/grey outside of
+   focus. */
+#tree-search {
+	background-color: var(--arc-surface) !important;
+	color: var(--arc-text);
+	border-color: var(--arc-border);
+}
 #tree-search:focus {
 	background-color: var(--arc-surface) !important;
 	color: var(--arc-text);
@@ -412,6 +426,15 @@ img.diagram {
 	background: var(--arc-accent);
 	color: var(--arc-accent-contrast);
 	border-color: var(--arc-accent);
+}
+
+/* Diagram zoom slider: Archi's stock rule above hardcodes a light-grey
+   Firefox track (#ddd) regardless of theme - barely visible once it sits in
+   a light panel heading, but stands out now that .root-panel-heading is
+   dark in dark mode. Chrome/Safari have no stock override here (native
+   slider chrome), so they're unaffected either way. */
+html.dark input[type=range]::-moz-range-track {
+	background: var(--arc-border);
 }
 
 /* Rendered Markdown (element/view/model Documentation & Purpose text),
