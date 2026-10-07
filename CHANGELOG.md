@@ -8,6 +8,32 @@ project version (see [docs/VERSIONING.md](docs/VERSIONING.md) for what a
 tag). This file only calls out what actually changed for someone running the
 image, not every commit — see the git history for that level of detail.
 
+## [1.1.1] — dark theme & release pipeline fixes
+
+Bugfix release, no feature changes.
+
+- Fix the dark report theme: panel headers (model tree, view, element
+  detail) stayed on Bootstrap's light background because Bootstrap's own
+  `.panel-default>.panel-heading` rule outranks a single-class override
+  regardless of stylesheet order; also themed the model-tree search box's
+  resting (non-focus) state and the Firefox zoom-slider track, both
+  previously hidden behind the same bug.
+- Fix Archi version resolution (`docker/Dockerfile` and this repo's own
+  release workflow): archi.io's release *tag* convention has changed
+  shape release to release (dotted, underscored, mixed, and now missing
+  the patch digit entirely) and old releases aren't kept around to guess
+  against — resolve the version from the release's `name` field instead
+  of the tag, and look a pinned version up by matching `name` across the
+  releases list rather than guessing a tag shape.
+- Pin the `linux/arm64` build's Maven image to the `3.9.x` line
+  (`maven:3.9-eclipse-temurin-21`): the floating `maven:3-eclipse-
+  temurin-21` tag moved to Maven 3.10.0, whose bundled Maven Resolver 2.x
+  rejects the `/`-containing classifier Tycho assigns to system-scoped
+  dependencies injected from a bundle's `Bundle-ClassPath` — broke the
+  arm64 source build on Archi 5.10.0's new `com.archimatetool.markdown`
+  bundle ([eclipse-tycho/tycho#6399](https://github.com/eclipse-tycho/tycho/issues/6399),
+  unfixed upstream at the time of this release).
+
 ## [1.1.0] — multi-model support
 
 **Highlight: one container instance can now serve reports for several
