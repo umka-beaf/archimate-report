@@ -43,6 +43,10 @@ Bugfix release, no feature changes.
   (`js/model.js`) against non-string `postMessage` payloads (e.g. from
   browser extensions or devtools) — it used to throw on anything that
   wasn't its own `"key=id"` format.
+- Theme the relation tables on element/view pages (`table-striped` /
+  `table-hover`, e.g. the "Связи"/"Elements" tabs): odd rows and the
+  hover state kept Bootstrap's light grey regardless of theme, which
+  read as pale stripes cutting across an otherwise dark table.
 
 ## [1.1.0] — multi-model support
 

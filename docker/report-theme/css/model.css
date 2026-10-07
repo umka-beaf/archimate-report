@@ -362,6 +362,19 @@ html.frame > body {
 .table > tbody > tr > td {
 	border-color: var(--arc-border) !important;
 }
+/* Element/view relation tables use Bootstrap's table-striped/table-hover
+   (e.g. class="table table-striped table-hover table-condensed") - without
+   overriding these, odd rows and the hover state keep Bootstrap's light
+   grey (#f9f9f9/#f5f5f5), which reads as light stripes cutting across an
+   otherwise dark table. Match Bootstrap's own selector shape (same
+   specificity, same tie-breaks-by-source-order story as .root-panel-heading
+   above) rather than relying on a plain .table-striped class alone. */
+.table-striped > tbody > tr:nth-of-type(odd) {
+	background-color: var(--arc-surface-alt);
+}
+.table-hover > tbody > tr:hover {
+	background-color: var(--arc-border);
+}
 
 /* Modal dialogs (About / Hint) */
 .modal-content {
