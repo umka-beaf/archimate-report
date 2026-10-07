@@ -33,6 +33,16 @@ Bugfix release, no feature changes.
   arm64 source build on Archi 5.10.0's new `com.archimatetool.markdown`
   bundle ([eclipse-tycho/tycho#6399](https://github.com/eclipse-tycho/tycho/issues/6399),
   unfixed upstream at the time of this release).
+- Caddy now sends `Cache-Control: no-cache` for the report's `.css`/`.js`
+  assets. Without it, browsers were free to serve a stale cached copy of
+  the theme indefinitely across image upgrades (no explicit freshness
+  info meant heuristic caching off `Last-Modified`, which doesn't change
+  between builds) — this is why the dark-theme fix above could look like
+  it "didn't work" after upgrading until a cache-busted reload.
+- Guard the report's cross-frame navigation message handler
+  (`js/model.js`) against non-string `postMessage` payloads (e.g. from
+  browser extensions or devtools) — it used to throw on anything that
+  wasn't its own `"key=id"` format.
 
 ## [1.1.0] — multi-model support
 

@@ -292,6 +292,10 @@ $(document).ready(function() {
 	}
 
 	$(window).on('message', function (e) {
+		// Guard against postMessages that aren't ours (browser extensions,
+		// devtools, etc. can post arbitrary messages to the window) - this
+		// listener only understands its own "key=id" string format.
+		if (typeof e.originalEvent.data !== 'string' || e.originalEvent.data.indexOf('=') === -1) return;
 		const id = e.originalEvent.data.split('=').pop();
 		setLocationForView(id);
 		//openViewFromLocation(true);

@@ -38,6 +38,19 @@
 	handle /*/status {
 		reverse_proxy 127.0.0.1:8088
 	}
+	# Theme/report static assets (css/js, both single- and multi-model paths)
+	# carry no explicit freshness info from Archi/our overlay, so browsers
+	# fall back to heuristic caching off Last-Modified and can serve a stale
+	# copy indefinitely across image upgrades without ever revalidating -
+	# bit us after the v1.1.1 theme fix (CLAUDE.md §35). `no-cache` doesn't
+	# disable caching, it just forces a conditional GET (If-Modified-Since/
+	# If-None-Match) on every load, which file_server already answers with a
+	# cheap 304 when nothing changed.
+	@themeAssets {
+		path *.css *.js
+	}
+	header @themeAssets Cache-Control "no-cache"
+
 	handle {
 		root * /data/report
 		file_server
